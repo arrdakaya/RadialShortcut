@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/RadialShortcut.App/RadialShortcut.App.csproj" />
+    <Project Path="src/RadialShortcut.Core/RadialShortcut.Core.csproj" />
+    <Project Path="src/RadialShortcut.Input/RadialShortcut.Input.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/RadialShortcut.Tests/RadialShortcut.Tests.csproj" />
+  </Folder>
+</Solution>
