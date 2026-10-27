@@ -8,6 +8,7 @@
   <ItemGroup>
     <PackageReference Include="H.NotifyIcon.Wpf" Version="2.4.1" />
     <PackageReference Include="ZXing.Net" Version="0.16.11" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.31.0" />
   </ItemGroup>
 
   <PropertyGroup>
@@ -17,7 +18,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <AssemblyName>RadialShortcut</AssemblyName>
+    <Version>0.6.0</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets/app.ico</ApplicationIcon>
     <!-- A tray app that idles almost all day: no background GC thread, and hand memory back eagerly. -->
     <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
     <!-- Only takes effect with dotnet publish -r: precompiled code, so tools open without JIT pauses. -->
@@ -29,6 +32,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Resource Include="Assets/app.ico" />
     <EmbeddedResource Include="config.example.json" LogicalName="RadialShortcut.App.config.example.json" />
   </ItemGroup>
 

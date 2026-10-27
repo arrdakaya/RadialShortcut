@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Text;
 using static RadialShortcut.Input.NativeMethods;
 
@@ -35,11 +36,48 @@ public sealed class TargetFilter
         if (pid == 0 || pid == _ownPid)
             return false;
 
+        // Games: a right-hold there is aiming or a skill, not a request for the ring.
+        if (IsFullscreen(hwnd) || IsCursorClipped())
+            return false;
+
         var info = GetInfo(pid);
         if (info.Elevated && !_selfElevated)
             return false; // UIPI: we could not replay the click into this window.
 
         return !_excluded.Contains(info.Name);
+    }
+
+    /// <summary>Exclusive or borderless full screen: the window covers its whole monitor. The desktop itself does too.</summary>
+    private static bool IsFullscreen(IntPtr hwnd)
+    {
+        // A maximized window on a monitor without a taskbar covers it too, but is no game.
+        if (IsZoomed(hwnd) || !GetWindowRect(hwnd, out var window))
+            return false;
+
+        var info = new MONITORINFO { cbSize = Marshal.SizeOf<MONITORINFO>() };
+        if (!GetMonitorInfo(MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST), ref info))
+            return false;
+
+        var m = info.rcMonitor;
+        if (window.Left > m.Left || window.Top > m.Top || window.Right < m.Right || window.Bottom < m.Bottom)
+            return false;
+
+        var name = new StringBuilder(32);
+        GetClassName(hwnd, name, name.Capacity);
+        return name.ToString() is not ("Progman" or "WorkerW");
+    }
+
+    /// <summary>Games that run in a window still lock the cursor inside it.</summary>
+    private static bool IsCursorClipped()
+    {
+        if (!GetClipCursor(out var clip))
+            return false;
+
+        var left = GetSystemMetrics(SM_XVIRTUALSCREEN);
+        var top = GetSystemMetrics(SM_YVIRTUALSCREEN);
+        return clip.Left > left || clip.Top > top
+            || clip.Right < left + GetSystemMetrics(SM_CXVIRTUALSCREEN)
+            || clip.Bottom < top + GetSystemMetrics(SM_CYVIRTUALSCREEN);
     }
 
     private ProcessInfo GetInfo(uint pid)

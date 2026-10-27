@@ -13,11 +13,15 @@ public sealed class RingCatalog
 {
     public const int MinSlices = 2, MaxSlices = 12;
 
-    private readonly List<(Ring Ring, string Process, Regex? Title)> _specific = [];
+    private readonly List<(Ring Ring, string Layer, string Process, Regex? Title)> _specific = [];
+    private readonly Dictionary<string, Ring> _globals = [];
 
-    public Ring Global { get; }
+    /// <summary>The global ring of the main layer.</summary>
+    public Ring Global => _globals[RingLayers.Main];
 
-    public IEnumerable<Ring> All => _specific.Select(s => s.Ring).Prepend(Global);
+    public Ring GlobalFor(string layer) => _globals[layer];
+
+    public IEnumerable<Ring> All => _globals.Values.Concat(_specific.Select(s => s.Ring));
 
     /// <summary>What was skipped and why, in Turkish, for the tray notice.</summary>
     public IReadOnlyList<string> Warnings { get; }
@@ -26,7 +30,6 @@ public sealed class RingCatalog
     {
         var warnings = new List<string>();
         var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        Ring? global = null;
 
         foreach (var config in rings ?? [])
         {
@@ -45,13 +48,18 @@ public sealed class RingCatalog
                 continue;
             }
 
+            var layer = config.Layer?.Trim().ToLowerInvariant() ?? RingLayers.Main;
+            if (!RingLayers.All.Contains(layer))
+            {
+                warnings.Add($"{name}: \"{config.Layer}\" diye bir katman yok (main veya files), halka atlandı.");
+                continue;
+            }
+
             var ring = new Ring(config.Id, items);
             if (config.Match is null)
             {
-                if (global is null)
-                    global = ring;
-                else
-                    warnings.Add($"{name}: eşleşmesi olmayan ikinci halka atlandı (genel halka zaten var).");
+                if (!_globals.TryAdd(layer, ring))
+                    warnings.Add($"{name}: {layer} katmanında eşleşmesi olmayan ikinci halka atlandı (genel halka zaten var).");
                 continue;
             }
 
@@ -74,28 +82,29 @@ public sealed class RingCatalog
                     continue;
                 }
             }
-            _specific.Add((ring, ProcessName(config.Match.Process), title));
+            _specific.Add((ring, layer, ProcessName(config.Match.Process), title));
         }
 
-        // An empty id cannot clash with a ring from the file, those are checked to have one.
-        Global = global ?? new Ring("", DefaultRing.For(defaultSliceCount));
+        // Ids from the file are never empty or start with a control character, so these cannot clash.
+        _globals.TryAdd(RingLayers.Main, new Ring("", DefaultRing.For(defaultSliceCount)));
+        _globals.TryAdd(RingLayers.Files, new Ring("files", DefaultFileRing.Items));
         Warnings = warnings;
     }
 
-    public Ring For(string process, string windowTitle)
+    public Ring For(string process, string windowTitle, string layer = RingLayers.Main)
     {
         process = ProcessName(process);
         Ring? byProcess = null;
-        foreach (var (ring, p, title) in _specific)
+        foreach (var (ring, l, p, title) in _specific)
         {
-            if (!string.Equals(p, process, StringComparison.OrdinalIgnoreCase))
+            if (l != layer || !string.Equals(p, process, StringComparison.OrdinalIgnoreCase))
                 continue;
             if (title is null)
                 byProcess ??= ring;
             else if (Matches(title, windowTitle))
                 return ring;
         }
-        return byProcess ?? Global;
+        return byProcess ?? _globals[layer];
     }
 
     /// <summary>"chrome", "Chrome.exe" and "C:\...\chrome.exe" all become "chrome.exe"-style names.</summary>
@@ -121,7 +130,7 @@ public sealed class RingCatalog
     {
         if (slice.Tool is { } toolId)
         {
-            var tool = DefaultRing.Items.FirstOrDefault(t => t.Id == toolId);
+            var tool = DefaultRing.Items.Concat(DefaultFileRing.Items).FirstOrDefault(t => t.Id == toolId);
             if (tool is null)
             {
                 warnings.Add($"{ring}: \"{toolId}\" diye bir araç yok, dilim atlandı.");

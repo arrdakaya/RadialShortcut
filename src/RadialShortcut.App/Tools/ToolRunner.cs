@@ -18,6 +18,13 @@ public static class ToolRunner
 {
     private static bool _busy;
 
+    /// <summary>A tool is open or working; updates wait for this to clear.</summary>
+    public static bool IsBusy => _busy;
+
+    /// <summary>Adds what a tool made to the library ("Kütüphane").</summary>
+    internal static void Remember(string tool, string? path = null, string? text = null) =>
+        History.Add(AppPaths.HistoryFile, new HistoryEntry(DateTime.Now, tool, path, text));
+
     public static async Task RunAsync(RingItem item, ScreenPoint at)
     {
         // A second gesture while a picker or tool is still up would stack overlays.
@@ -29,6 +36,7 @@ public static class ToolRunner
             // The ring is closed by now, so the window under the press point is the one that was right-clicked.
             var target = Native.WindowAt(at.X, at.Y);
             var point = (at.X, at.Y);
+            var anchor = new Int32Rect(at.X, at.Y, 1, 1);
             switch (item.Id)
             {
                 case "crop":
@@ -70,6 +78,30 @@ public static class ToolRunner
                 case "scroll":
                     await ScrollCapture.RunAsync();
                     break;
+                case "convert":
+                    await FileTools.ConvertAsync(target, anchor);
+                    break;
+                case "compress":
+                    await FileTools.CompressAsync(target, anchor);
+                    break;
+                case "resize":
+                    await FileTools.ResizeAsync(target, anchor);
+                    break;
+                case "trim":
+                    await TrimWindow.RunAsync(target, anchor);
+                    break;
+                case "annotate":
+                    await AnnotateWindow.RunAsync(target, anchor);
+                    break;
+                case "download":
+                    await Downloader.RunAsync(anchor);
+                    break;
+                case "library":
+                    LibraryWindow.ShowOrActivate();
+                    break;
+                case "nobg":
+                    await BackgroundRemover.RunAsync(target, anchor);
+                    break;
                 case "action" when item.Action is { } action:
                     await ActionRunner.RunAsync(action, target);
                     break;
@@ -110,6 +142,7 @@ public static class ToolRunner
         ResultCard.ForImage("Panoya kopyalandı", $"{region.ScreenRect.Width} × {region.ScreenRect.Height} · {Path.GetFileName(file)}", region.Image, region.ScreenRect)
             .WithButton("Dosyayı sil", () => DeleteCapture(file))
             .WithButton("Klasörde göster", () => ShowInFolder(file))
+            .WithButton("Not ekle", () => _ = AnnotateWindow.OpenAsync(file, region.Image))
             .WithButton("Tamam", () => { }, primary: true)
             .ShowNear();
     }
@@ -134,6 +167,7 @@ public static class ToolRunner
             return;
 
         CopyText(text);
+        Remember("ocr", text: text);
         ResultCard.ForText("Metin panoya kopyalandı", text, region.ScreenRect)
             .WithButton("Tamam", () => { }, primary: true)
             .ShowNear();
@@ -219,6 +253,7 @@ public static class ToolRunner
         var encoder = new PngBitmapEncoder();
         encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(image));
         encoder.Save(stream);
+        Remember("capture", file);
         return file;
     }
 

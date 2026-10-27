@@ -131,7 +131,7 @@ internal static class WebTools
         [property: JsonPropertyName("text")] string Text);
 
     /// <summary>Asks once per tool; the answer is kept in consent.json, so config.json stays as the user wrote it.</summary>
-    private static async Task<bool> ConsentAsync(string tool, string title, string what, Int32Rect anchor)
+    internal static async Task<bool> ConsentAsync(string tool, string title, string what, Int32Rect anchor)
     {
         var granted = ConsentStore.Load(AppPaths.ConsentFile);
         if (granted.Contains(tool))

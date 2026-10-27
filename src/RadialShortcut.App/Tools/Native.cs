@@ -68,6 +68,14 @@ internal static class Native
 
     public static bool IsKeyDown(int vk) => (GetAsyncKeyState(vk) & 0x8000) != 0;
 
+    public static bool IsShiftDown() => IsKeyDown(VK_SHIFT);
+
+    public static string ClassName(IntPtr hwnd)
+    {
+        var name = new StringBuilder(64);
+        return GetClassName(hwnd, name, name.Capacity) > 0 ? name.ToString() : "";
+    }
+
     public const int VK_ESCAPE = 0x1B;
 
     /// <summary>Scrolls whatever is under the cursor. Negative notches scroll down.</summary>
@@ -151,6 +159,7 @@ internal static class Native
     [DllImport("user32.dll")] private static extern uint SendInput(uint count, INPUT[] inputs, int size);
     [DllImport("user32.dll")] private static extern uint GetClipboardSequenceNumber();
     [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int vk);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetClassName(IntPtr hWnd, StringBuilder name, int maxCount);
     [DllImport("user32.dll")] private static extern bool SetCursorPos(int x, int y);
     [DllImport("user32.dll")] private static extern bool SetWindowDisplayAffinity(IntPtr hwnd, uint affinity);
 }

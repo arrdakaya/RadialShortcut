@@ -2,10 +2,28 @@
 // aynı klasördeki config.json dosyasına yap. config.json kaydedildiği anda uygulanır.
 // Satırlar // ile başlayan açıklamalar config.json içinde de kullanılabilir.
 {
-  // Sağ tuşa hiç dokunulmayan uygulamalar (oyunlar, uzak masaüstü...). ".exe" yazmak isteğe bağlı.
+  // Sağ tuşa hiç dokunulmayan uygulamalar (uzak masaüstü...). ".exe" yazmak isteğe bağlı.
+  // Tam ekran pencerelerde ve imleci kilitleyen oyunlarda halka zaten açılmaz.
   "excludedProcesses": ["mstsc", "vmconnect"],
 
   "rings": [
+    {
+      // "layer": "files" olan halkalar Shift + sağ tuş basılı tutunca açılır (dosya halkası).
+      // Yazmazsan yerleşik dosya halkası kullanılır. Bu katmanda da "match" kullanılabilir.
+      "id": "dosya",
+      "name": "Dosya",
+      "layer": "files",
+      "slices": [
+        { "tool": "convert" },
+        { "tool": "compress" },
+        { "tool": "resize" },
+        { "tool": "trim" },
+        { "tool": "annotate" },
+        { "tool": "download" },
+        { "tool": "library" },
+        { "tool": "nobg" }
+      ]
+    },
     {
       // "match" olmayan halka genel halkadır: başka halka eşleşmeyince bu açılır.
       // Hiç genel halka yazmazsan yerleşik araç halkası kullanılır.

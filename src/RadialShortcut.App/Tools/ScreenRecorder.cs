@@ -68,8 +68,10 @@ internal static class ScreenRecorder
         }
 
         var duration = clock.Elapsed;
+        ToolRunner.Remember("record", file);
         ResultCard.ForMessage("Kayıt kaydedildi", $"{rect.Width} × {rect.Height} · {duration:mm\\:ss} · {Path.GetFileName(file)}", rect)
             .WithButton("Klasörde göster", () => ToolRunner.ShowInFolder(file))
+            .WithButton("Kırp", () => TrimWindow.Open(file))
             .WithButton("Oynat", () => ToolRunner.OpenUrl(file), primary: true)
             .ShowNear();
     }

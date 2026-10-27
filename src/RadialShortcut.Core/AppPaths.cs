@@ -20,5 +20,17 @@ public static class AppPaths
     /// <summary>Documents\RadialShortcut\Videolar: where screen recordings are saved. Created on first use.</summary>
     public static string RecordingDirectory { get; } = Path.Combine(OutputDirectory, "Videolar");
 
+    /// <summary>Documents\RadialShortcut\İndirilenler: media downloaded from a link.</summary>
+    public static string DownloadDirectory { get; } = Path.Combine(OutputDirectory, "İndirilenler");
+
+    /// <summary>Documents\RadialShortcut\Dosyalar: converted files whose own folder cannot be written to.</summary>
+    public static string FilesDirectory { get; } = Path.Combine(OutputDirectory, "Dosyalar");
+
+    /// <summary>%LocalAppData%\RadialShortcut	ools: ffmpeg, yt-dlp and the background model, downloaded on first use.</summary>
+    public static string ToolsDirectory { get; } =
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "RadialShortcut", "tools");
+
+    public static string HistoryFile => Path.Combine(ConfigDirectory, "history.jsonl");
+
     public static void EnsureCreated() => Directory.CreateDirectory(ConfigDirectory);
 }

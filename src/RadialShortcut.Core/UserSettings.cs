@@ -14,6 +14,15 @@ public sealed class UserSettings
     /// <summary>Target language for "translate", as a DeepL / Google code.</summary>
     public string TranslateTarget { get; set; } = "TR";
 
+    /// <summary>Opens the ring at the cursor from the keyboard; hold it, point, release to pick. Shift added opens the file ring.</summary>
+    public string RingHotkey { get; set; } = "Ctrl+Alt+Space";
+
+    /// <summary>"system", "light" or "dark".</summary>
+    public string Theme { get; set; } = "system";
+
+    /// <summary>GitHub "owner/repo" whose releases carry updates; empty turns update checks off.</summary>
+    public string? UpdateRepo { get; set; }
+
     /// <summary>Processes where the right button is left alone; null keeps the built-in list.</summary>
     public List<string>? ExcludedProcesses { get; set; }
 

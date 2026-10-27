@@ -12,7 +12,7 @@ namespace RadialShortcut.App.Tools;
 /// </summary>
 internal sealed class Badge : Window
 {
-    private readonly TextBlock _text = new() { Foreground = Brushes.White, FontSize = 12, VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBlock _text = new() { Foreground = Palette.Text, FontSize = 12, VerticalAlignment = VerticalAlignment.Center };
     private readonly StackPanel _row = new() { Orientation = Orientation.Horizontal };
     private readonly Int32Rect _region;
 
@@ -33,8 +33,8 @@ internal sealed class Badge : Window
         _row.Children.Add(_text);
         Content = new Border
         {
-            Background = new SolidColorBrush(Color.FromArgb(0xEE, 0x26, 0x2A, 0x30)),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0x35, 0x3A, 0x42)),
+            Background = Palette.Surface,
+            BorderBrush = Palette.Line,
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(14),
             Padding = new Thickness(12, 5, 6, 5),

@@ -24,6 +24,10 @@ public partial class App : Application
     private RingWindow? _ring; // The ring of the current gesture.
     private FileSystemWatcher? _configWatcher;
     private DispatcherTimer? _reloadTimer;
+    private HotkeyRing? _hotkey;
+    private string? _updateRepo;
+    private Updater.Release? _update;
+    private DispatcherTimer? _updateTimer;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -53,7 +57,9 @@ public partial class App : Application
 
         _hook = new MouseHookService(_settings);
         _hook.Event += ev => Dispatcher.BeginInvoke(() => OnGesture(ev));
+        _hotkey = new HotkeyRing(OpenFromHotkey, Release);
         LoadConfig(startup: true);
+        StartUpdateChecks();
         _hook.Start();
         WatchConfig();
     }
@@ -71,6 +77,11 @@ public partial class App : Application
             return;
         }
 
+        Palette.Theme = config.Theme;
+        _updateRepo = string.IsNullOrWhiteSpace(config.UpdateRepo) ? null : config.UpdateRepo.Trim();
+        var hotkeyProblem = _hotkey is not null && !_hotkey.Register(config.RingHotkey)
+            ? $"Klavye kısayolu \"{config.RingHotkey}\" kullanılamıyor (geçersiz ya da başka bir uygulamada)."
+            : null;
         _hook?.SetExcludedProcesses(config.ExcludedProcesses?.Select(RingCatalog.ProcessName) ?? _settings.ExcludedProcesses);
 
         _catalog = new RingCatalog(config.Rings, _settings.SliceCount);
@@ -87,6 +98,8 @@ public partial class App : Application
 
         if (_catalog.Warnings.Count > 0)
             _tray?.ShowNotification("config.json: bazı halkalar atlandı", string.Join("\n", _catalog.Warnings.Take(4)));
+        else if (hotkeyProblem is not null)
+            _tray?.ShowNotification("config.json", hotkeyProblem);
         else if (!startup)
             _tray?.ShowNotification("Ayarlar yüklendi", $"{_rings.Count} halka hazır.");
     }
@@ -140,8 +153,11 @@ public partial class App : Application
         {
             // The ring follows the window that was right-clicked, not the one with focus (PLAN.md, section 8).
             var target = Native.WindowAt(ev.Origin.X, ev.Origin.Y);
-            var ring = _catalog.For(Native.ProcessName(target), Native.WindowTitle(target));
-            _ring = _rings.GetValueOrDefault(ring.Id) ?? _rings[_catalog.Global.Id];
+            // Shift picks the other layer: over files selected in Explorer the file ring is the default.
+            // Checked here, on the UI thread, so the hook callback stays fast.
+            var files = SelectedFiles.IsExplorer(target) && SelectedFiles.InExplorer(target).Count > 0;
+            var layer = files != Native.IsShiftDown() ? RingLayers.Files : RingLayers.Main;
+            _ring = RingFor(target, layer);
         }
         if (_ring is null)
             return;
@@ -155,16 +171,73 @@ public partial class App : Application
                 _ring.Track(ev.Point);
                 break;
             case GestureEventKind.RingReleased:
-                var slice = _ring.SliceAt(ev.Point);
-                _ring.Close(slice);
-                if (slice >= 0)
-                    _ = RunAfterRingFadesAsync(_ring.ItemAt(slice), ev.Origin);
+                Release(_ring, _ring.SliceAt(ev.Point), ev.Origin);
                 break;
             case GestureEventKind.RingCancelled:
                 _ring.Close(-1);
                 break;
         }
     }
+
+    private RingWindow RingFor(IntPtr target, string layer)
+    {
+        var ring = _catalog.For(Native.ProcessName(target), Native.WindowTitle(target), layer);
+        return _rings.GetValueOrDefault(ring.Id) ?? _rings[_catalog.GlobalFor(layer).Id];
+    }
+
+    private RingWindow OpenFromHotkey(string layer, ScreenPoint at)
+    {
+        var ring = RingFor(Native.WindowAt(at.X, at.Y), layer);
+        ring.Open(at);
+        return ring;
+    }
+
+    private static void Release(RingWindow ring, int slice, ScreenPoint origin)
+    {
+        ring.Close(slice);
+        if (slice >= 0)
+            _ = RunAfterRingFadesAsync(ring.ItemAt(slice), origin);
+    }
+
+    /// <summary>Only with "updateRepo" set: half a minute after start, then once a day.</summary>
+    private void StartUpdateChecks()
+    {
+        _updateTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
+        _updateTimer.Tick += async (_, _) =>
+        {
+            _updateTimer.Interval = TimeSpan.FromHours(24);
+            if (_updateRepo is null || _update is not null || await Updater.CheckAsync(_updateRepo) is not { } release)
+                return;
+            _update = release;
+            var item = TrayItem("UpdateItem");
+            item.Header = $"Güncelle (v{release.Version})";
+            item.Visibility = Visibility.Visible;
+            _tray?.ShowNotification("Güncelleme var", $"RadialShortcut {release.Version} hazır. Tepsi menüsünden \"Güncelle\" ile kurabilirsin.");
+        };
+        _updateTimer.Start();
+    }
+
+    private MenuItem TrayItem(string name) => _tray!.ContextMenu!.Items.OfType<MenuItem>().Single(i => i.Name == name);
+
+    private async void OnUpdateClick(object sender, RoutedEventArgs e)
+    {
+        if (_update is null)
+            return;
+        var item = (MenuItem)sender;
+        item.IsEnabled = false;
+        try
+        {
+            await Updater.InstallAsync(_update, text => item.Header = text);
+        }
+        catch (Exception ex) when (ex is IOException or System.Net.Http.HttpRequestException or InvalidDataException or TaskCanceledException or UnauthorizedAccessException)
+        {
+            _tray?.ShowNotification("Güncellenemedi", ex.Message);
+            item.Header = $"Güncelle (v{_update.Version})";
+            item.IsEnabled = true;
+        }
+    }
+
+    private void OnLibraryClick(object sender, RoutedEventArgs e) => LibraryWindow.ShowOrActivate();
 
     /// <summary>Screen tools freeze the screen first, so the ring has to be gone before they start.</summary>
     private static async Task RunAfterRingFadesAsync(RingItem item, ScreenPoint origin)
@@ -176,6 +249,7 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         _configWatcher?.Dispose();
+        _hotkey?.Dispose();
         _hook?.Dispose();
         _tray?.Dispose();
         _singleInstance?.ReleaseMutex();

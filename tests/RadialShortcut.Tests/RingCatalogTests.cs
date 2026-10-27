@@ -60,7 +60,7 @@ public class RingCatalogTests
             ] }
             """);
         Assert.Equal(6, catalog.Warnings.Count);
-        Assert.Single(catalog.All); // only the built-in global ring is left
+        Assert.Equal(2, catalog.All.Count()); // only the built-in main and file rings are left
     }
 
     [Fact]
@@ -70,8 +70,32 @@ public class RingCatalogTests
         var settings = UserSettings.Parse(File.ReadAllText(file));
         var catalog = new RingCatalog(settings.Rings, 8);
         Assert.Empty(catalog.Warnings);
-        Assert.Equal(4, catalog.All.Count());
+        Assert.Equal(5, catalog.All.Count());
         Assert.Equal("chrome-youtube", catalog.For("chrome.exe", "Müzik - YouTube").Id);
+    }
+
+    [Fact]
+    public void FileLayerHasItsOwnBuiltInRing()
+    {
+        var catalog = Catalog(Rings);
+        Assert.Equal("convert", catalog.For("notepad.exe", "", RingLayers.Files).Items[0].Id);
+        Assert.Equal("g", catalog.For("notepad.exe", "").Id);
+    }
+
+    [Fact]
+    public void LayersMatchSeparately()
+    {
+        var catalog = Catalog("""
+            { "rings": [
+              { "id": "f", "layer": "files", "slices": [ { "tool": "convert" }, { "tool": "ocr" } ] },
+              { "id": "fc", "layer": "Files", "match": { "process": "chrome" }, "slices": [ { "tool": "download" }, { "tool": "nobg" } ] },
+              { "id": "x", "layer": "nope", "slices": [ { "tool": "ocr" }, { "tool": "crop" } ] },
+            ] }
+            """);
+        Assert.Equal("fc", catalog.For("chrome.exe", "", RingLayers.Files).Id);
+        Assert.Equal("f", catalog.For("notepad.exe", "", RingLayers.Files).Id);
+        Assert.Equal("", catalog.For("chrome.exe", "").Id);
+        Assert.Single(catalog.Warnings);
     }
 }
 
@@ -98,4 +122,5 @@ public class KeyChordTests
     [InlineData("Ctrl+Blah")]
     [InlineData("F25")]
     public void Rejects(string text) => Assert.False(KeyChord.TryParse(text, out _));
+
 }

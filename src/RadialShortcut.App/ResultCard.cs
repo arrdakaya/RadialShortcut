@@ -15,13 +15,14 @@ namespace RadialShortcut.App;
 /// </summary>
 public sealed class ResultCard : Window
 {
-    private static readonly Brush Surface = new SolidColorBrush(Color.FromRgb(0x26, 0x2A, 0x30));
-    private static readonly Brush Line = new SolidColorBrush(Color.FromRgb(0x35, 0x3A, 0x42));
-    private static readonly Brush Text = new SolidColorBrush(Color.FromRgb(0xF0, 0xF0, 0xF0));
-    private static readonly Brush Muted = new SolidColorBrush(Color.FromRgb(0xA8, 0xA8, 0xA8));
-    private static readonly Brush Accent = new SolidColorBrush(Color.FromRgb(0x00, 0x67, 0xC0));
+    private static Brush Surface => Palette.Surface;
+    private static Brush Line => Palette.Line;
+    private static Brush Text => Palette.Text;
+    private static Brush Muted => Palette.Muted;
+    private static Brush Accent => Palette.Accent;
 
-    private readonly StackPanel _buttons = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 10, 0, 0) };
+    // Wraps, so a card with many choices ("PNG", "JPG", "WebP"...) stays narrow.
+    private readonly WrapPanel _buttons = new() { HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 10, 0, -6) };
     private readonly Int32Rect _anchor;
 
     private ResultCard(string title, string? subtitle, UIElement? body, Int32Rect anchor)
@@ -122,12 +123,30 @@ public sealed class ResultCard : Window
         return answer.Task;
     }
 
+    /// <summary>
+    /// Offers a few choices and completes with the index of the one clicked, or -1 when the card
+    /// is closed any other way.
+    /// </summary>
+    public static Task<int> ChooseAsync(string title, string? message, IReadOnlyList<string> choices, Int32Rect anchor)
+    {
+        var answer = new TaskCompletionSource<int>();
+        var card = new ResultCard(title, message, null, anchor);
+        for (var i = 0; i < choices.Count; i++)
+        {
+            var index = i;
+            card.WithButton(choices[i], () => answer.TrySetResult(index), primary: i == 0);
+        }
+        card.Closed += (_, _) => answer.TrySetResult(-1);
+        card.ShowNear();
+        return answer.Task;
+    }
+
     public ResultCard WithButton(string label, Action onClick, bool primary = false)
     {
         var button = new Button
         {
             Content = label,
-            Margin = new Thickness(6, 0, 0, 0),
+            Margin = new Thickness(6, 0, 0, 6),
             Padding = new Thickness(12, 5, 12, 5),
             Foreground = primary ? Brushes.White : Text,
             Background = primary ? Accent : Line,

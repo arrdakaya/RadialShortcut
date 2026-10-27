@@ -89,10 +89,10 @@ internal static class SelectionTools
 
     private static string Shorten(string s) => s.Length > 40 ? s[..40] + "…" : s;
 
-    private sealed record SavedClipboard(string? Text, BitmapSource? Image);
+    internal sealed record SavedClipboard(string? Text, BitmapSource? Image);
 
     /// <summary>Only text and images are kept; richer formats would need every format copied by hand.</summary>
-    private static SavedClipboard? SaveClipboard()
+    internal static SavedClipboard? SaveClipboard()
     {
         SavedClipboard? saved = null;
         try
@@ -106,7 +106,7 @@ internal static class SelectionTools
         return saved;
     }
 
-    private static void RestoreClipboard(SavedClipboard? saved)
+    internal static void RestoreClipboard(SavedClipboard? saved)
     {
         try
         {
