@@ -2,6 +2,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using H.NotifyIcon;
+using RadialShortcut.App.Tools;
 using RadialShortcut.Core;
 using RadialShortcut.Input;
 
@@ -66,12 +67,22 @@ public partial class App : Application
                 _ring.Track(ev.Point);
                 break;
             case GestureEventKind.RingReleased:
-                _ring.Close(_ring.SliceAt(ev.Point));
+                var slice = _ring.SliceAt(ev.Point);
+                _ring.Close(slice);
+                if (slice >= 0)
+                    _ = RunAfterRingFadesAsync(_ring.ItemAt(slice), ev.Origin);
                 break;
             case GestureEventKind.RingCancelled:
                 _ring.Close(-1);
                 break;
         }
+    }
+
+    /// <summary>Screen tools freeze the screen first, so the ring has to be gone before they start.</summary>
+    private static async Task RunAfterRingFadesAsync(RingItem item, ScreenPoint origin)
+    {
+        await Task.Delay(200);
+        await ToolRunner.RunAsync(item, origin);
     }
 
     protected override void OnExit(ExitEventArgs e)
