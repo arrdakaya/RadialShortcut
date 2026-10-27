@@ -15,6 +15,7 @@ public partial class App : Application
     private TaskbarIcon? _tray;
     private MouseHookService? _hook;
     private DebugOverlay? _debug;
+    private RingWindow? _ring;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -42,9 +43,35 @@ public partial class App : Application
         _debug = new DebugOverlay(settings);
         _debug.Show();
 
+        _ring = new RingWindow(new RingStyle(), settings, DefaultRing.For(settings.SliceCount));
+        _ring.Show();
+
         _hook = new MouseHookService(settings);
-        _hook.Event += ev => Dispatcher.BeginInvoke(() => _debug.Show(ev));
+        _hook.Event += ev => Dispatcher.BeginInvoke(() => OnGesture(ev));
         _hook.Start();
+    }
+
+    private void OnGesture(GestureEvent ev)
+    {
+        _debug?.Show(ev);
+        if (_ring is null)
+            return;
+
+        switch (ev.Kind)
+        {
+            case GestureEventKind.RingOpened:
+                _ring.Open(ev.Origin);
+                break;
+            case GestureEventKind.RingMoved:
+                _ring.Track(ev.Point);
+                break;
+            case GestureEventKind.RingReleased:
+                _ring.Close(_ring.SliceAt(ev.Point));
+                break;
+            case GestureEventKind.RingCancelled:
+                _ring.Close(-1);
+                break;
+        }
     }
 
     protected override void OnExit(ExitEventArgs e)

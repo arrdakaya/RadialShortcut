@@ -20,4 +20,15 @@ public static class RingGeometry
         var step = 360.0 / sliceCount;
         return (int)Math.Floor((AngleOf(dx, dy) + step / 2) / step) % sliceCount;
     }
+
+    /// <summary>
+    /// Moves a ring center so a ring of the given radius fits inside the area (e.g. a monitor's work area).
+    /// If the area is smaller than the ring, the ring is centered on that axis.
+    /// </summary>
+    public static (double X, double Y) FitInside(double x, double y, double radius,
+        double left, double top, double right, double bottom) =>
+        (Fit(x, radius, left, right), Fit(y, radius, top, bottom));
+
+    private static double Fit(double v, double radius, double min, double max) =>
+        max - min < 2 * radius ? (min + max) / 2 : Math.Clamp(v, min + radius, max - radius);
 }
