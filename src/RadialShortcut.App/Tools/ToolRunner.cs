@@ -9,6 +9,7 @@ using RadialShortcut.Core;
 using RadialShortcut.Input;
 using Windows.Graphics.Imaging;
 using Windows.Media.Ocr;
+using ZXing;
 
 namespace RadialShortcut.App.Tools;
 
@@ -25,6 +26,9 @@ public static class ToolRunner
         _busy = true;
         try
         {
+            // The ring is closed by now, so the window under the press point is the one that was right-clicked.
+            var target = Native.WindowAt(at.X, at.Y);
+            var point = (at.X, at.Y);
             switch (item.Id)
             {
                 case "crop":
@@ -33,22 +37,53 @@ public static class ToolRunner
                 case "ocr":
                     await OcrAsync();
                     break;
+                case "qr":
+                    await QrAsync();
+                    break;
+                case "picker":
+                    await ColorPicker.RunAsync();
+                    break;
+                case "ruler":
+                    await Ruler.RunAsync();
+                    break;
+                case "top":
+                    WindowTools.ToggleTopmost(target, point);
+                    break;
+                case "search":
+                    await SelectionTools.SearchAsync(target, point);
+                    break;
+                case "calc":
+                    await SelectionTools.CalculateAsync(target, point);
+                    break;
+                case "lens":
+                    await WebTools.LensAsync();
+                    break;
+                case "translate":
+                    await WebTools.TranslateAsync();
+                    break;
+                case "record":
+                    await ScreenRecorder.RunAsync();
+                    break;
+                case "scroll":
+                    await ScrollCapture.RunAsync();
+                    break;
                 default:
-                    var near = new Int32Rect(at.X, at.Y, 1, 1);
-                    ResultCard.ForMessage(item.Title, "Bu araç henüz hazır değil.", near).ShowNear();
+                    ResultCard.Near(point, item.Title, "Bu araç henüz hazır değil.").ShowNear();
                     break;
             }
         }
         catch (Exception e)
         {
-            var (x, y) = ScreenCapture.CursorPosition();
-            ResultCard.ForMessage($"{item.Title}: hata", e.Message, new Int32Rect(x, y, 1, 1)).ShowNear();
+            ResultCard.Near(ScreenCapture.CursorPosition(), $"{item.Title}: hata", e.Message).ShowNear();
         }
         finally
         {
             _busy = false;
         }
     }
+
+    /// <summary>Read on every use so hand edits to config.json apply without a restart.</summary>
+    internal static UserSettings Settings => UserSettings.Load(AppPaths.ConfigFile);
 
     private static async Task CropAsync()
     {
@@ -59,7 +94,7 @@ public static class ToolRunner
         var file = Save(region.Image);
 
         ResultCard.ForImage("Panoya kopyalandı", $"{region.ScreenRect.Width} × {region.ScreenRect.Height} · {Path.GetFileName(file)}", region.Image, region.ScreenRect)
-            .WithButton("Klasörde göster", () => Process.Start("explorer.exe", $"/select,\"{file}\""))
+            .WithButton("Klasörde göster", () => ShowInFolder(file))
             .WithButton("Tamam", () => { }, primary: true)
             .ShowNear();
     }
@@ -68,21 +103,8 @@ public static class ToolRunner
     {
         if (await RegionPicker.PickAsync() is not { } region)
             return;
-
-        var engine = OcrEngine.TryCreateFromUserProfileLanguages();
-        if (engine is null)
-        {
-            ResultCard.ForMessage("Metin okunamadı", "Windows'ta OCR destekli bir dil yüklü değil (Ayarlar → Zaman ve dil → Dil).", region.ScreenRect).ShowNear();
+        if (await RecognizeAsync(region) is not { } text)
             return;
-        }
-
-        var result = await engine.RecognizeAsync(ToSoftwareBitmap(Upscale(region.Image)));
-        var text = string.Join(Environment.NewLine, result.Lines.Select(l => l.Text)).Trim();
-        if (text.Length == 0)
-        {
-            ResultCard.ForMessage("Metin bulunamadı", "Seçilen bölgede okunabilir metin yok.", region.ScreenRect).ShowNear();
-            return;
-        }
 
         CopyText(text);
         ResultCard.ForText("Metin panoya kopyalandı", text, region.ScreenRect)
@@ -90,7 +112,51 @@ public static class ToolRunner
             .ShowNear();
     }
 
-    /// <summary>The Windows OCR engine misses small text; doubling small captures helps a lot.</summary>
+    private static async Task QrAsync()
+    {
+        if (await RegionPicker.PickAsync() is not { } region)
+            return;
+
+        var (pixels, w, h) = Bgra(Upscale(region.Image));
+        var reader = new BarcodeReaderGeneric { AutoRotate = true, Options = { TryHarder = true, TryInverted = true } };
+        var results = reader.DecodeMultiple(new RGBLuminanceSource(pixels, w, h, RGBLuminanceSource.BitmapFormat.BGRA32));
+        if (results is not { Length: > 0 })
+        {
+            ResultCard.ForMessage("Kod bulunamadı", "Seçilen bölgede okunabilir bir QR kod ya da barkod yok.", region.ScreenRect).ShowNear();
+            return;
+        }
+
+        var text = string.Join(Environment.NewLine, results.Select(r => r.Text).Distinct());
+        CopyText(text);
+        var card = ResultCard.ForText($"{results[0].BarcodeFormat} panoya kopyalandı", text, region.ScreenRect);
+        if (results.Length == 1 && Uri.TryCreate(text.Trim(), UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https")
+            card.WithButton("Aç", () => OpenUrl(uri.AbsoluteUri), primary: true);
+        else
+            card.WithButton("Tamam", () => { }, primary: true);
+        card.ShowNear();
+    }
+
+    /// <summary>OCR of a picked region. Shows its own card and returns null when there is nothing to use.</summary>
+    internal static async Task<string?> RecognizeAsync(CapturedRegion region)
+    {
+        var engine = OcrEngine.TryCreateFromUserProfileLanguages();
+        if (engine is null)
+        {
+            ResultCard.ForMessage("Metin okunamadı", "Windows'ta OCR destekli bir dil yüklü değil (Ayarlar → Zaman ve dil → Dil).", region.ScreenRect).ShowNear();
+            return null;
+        }
+
+        var result = await engine.RecognizeAsync(ToSoftwareBitmap(Upscale(region.Image)));
+        var text = string.Join(Environment.NewLine, result.Lines.Select(l => l.Text)).Trim();
+        if (text.Length == 0)
+        {
+            ResultCard.ForMessage("Metin bulunamadı", "Seçilen bölgede okunabilir metin yok.", region.ScreenRect).ShowNear();
+            return null;
+        }
+        return text;
+    }
+
+    /// <summary>OCR and barcode readers miss small details; doubling small captures helps a lot.</summary>
     private static BitmapSource Upscale(BitmapSource image)
     {
         if (image.PixelHeight >= 120 || image.PixelWidth * 2 > OcrEngine.MaxImageDimension)
@@ -101,22 +167,27 @@ public static class ToolRunner
         return scaled;
     }
 
-    private static SoftwareBitmap ToSoftwareBitmap(BitmapSource image)
+    internal static (byte[] Pixels, int Width, int Height) Bgra(BitmapSource image)
     {
         var bgra = new FormatConvertedBitmap(image, PixelFormats.Bgra32, null, 0);
         var stride = bgra.PixelWidth * 4;
         var pixels = new byte[stride * bgra.PixelHeight];
         bgra.CopyPixels(pixels, stride, 0);
+        return (pixels, bgra.PixelWidth, bgra.PixelHeight);
+    }
 
-        var bitmap = new SoftwareBitmap(BitmapPixelFormat.Bgra8, bgra.PixelWidth, bgra.PixelHeight, BitmapAlphaMode.Premultiplied);
+    private static SoftwareBitmap ToSoftwareBitmap(BitmapSource image)
+    {
+        var (pixels, w, h) = Bgra(image);
+        var bitmap = new SoftwareBitmap(BitmapPixelFormat.Bgra8, w, h, BitmapAlphaMode.Premultiplied);
         bitmap.CopyFromBuffer(pixels.AsBuffer());
         return bitmap;
     }
 
-    private static string Save(BitmapSource image)
+    internal static string Save(BitmapSource image, string name = "Ekran görüntüsü")
     {
         Directory.CreateDirectory(AppPaths.CaptureDirectory);
-        var file = Path.Combine(AppPaths.CaptureDirectory, $"Ekran görüntüsü {DateTime.Now:yyyy-MM-dd HHmmss}.png");
+        var file = Path.Combine(AppPaths.CaptureDirectory, $"{name} {DateTime.Now:yyyy-MM-dd HHmmss}.png");
         using var stream = File.Create(file);
         var encoder = new PngBitmapEncoder();
         encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(image));
@@ -124,12 +195,25 @@ public static class ToolRunner
         return file;
     }
 
+    internal static byte[] Png(BitmapSource image)
+    {
+        using var stream = new MemoryStream();
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(image));
+        encoder.Save(stream);
+        return stream.ToArray();
+    }
+
+    internal static void ShowInFolder(string file) => Process.Start("explorer.exe", $"/select,\"{file}\"");
+
+    internal static void OpenUrl(string url) => Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+
     // The clipboard can be briefly locked by another process; retry a few times before giving up.
-    private static void CopyImage(BitmapSource image) => Retry(() => Clipboard.SetImage(image));
+    internal static void CopyImage(BitmapSource image) => Retry(() => Clipboard.SetImage(image));
 
-    private static void CopyText(string text) => Retry(() => Clipboard.SetText(text));
+    internal static void CopyText(string text) => Retry(() => Clipboard.SetText(text));
 
-    private static void Retry(Action action)
+    internal static void Retry(Action action)
     {
         for (var i = 0; ; i++)
         {

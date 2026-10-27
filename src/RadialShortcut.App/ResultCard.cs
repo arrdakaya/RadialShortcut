@@ -102,6 +102,26 @@ public sealed class ResultCard : Window
 
     public static ResultCard ForMessage(string title, string message, Int32Rect anchor) => new(title, message, null, anchor);
 
+    public static ResultCard ForContent(string title, string? subtitle, UIElement body, Int32Rect anchor) => new(title, subtitle, body, anchor);
+
+    /// <summary>A message near a point; for tools that start without a region.</summary>
+    public static ResultCard Near((int X, int Y) point, string title, string message) => ForMessage(title, message, new Int32Rect(point.X, point.Y, 1, 1));
+
+    /// <summary>
+    /// Asks a yes/no question and completes when the card closes. Anything but the "yes" button,
+    /// including Esc or clicking elsewhere, counts as no.
+    /// </summary>
+    public static Task<bool> AskAsync(string title, string message, string yes, Int32Rect anchor)
+    {
+        var answer = new TaskCompletionSource<bool>();
+        var card = ForMessage(title, message, anchor)
+            .WithButton("Vazgeç", () => answer.TrySetResult(false))
+            .WithButton(yes, () => answer.TrySetResult(true), primary: true);
+        card.Closed += (_, _) => answer.TrySetResult(false);
+        card.ShowNear();
+        return answer.Task;
+    }
+
     public ResultCard WithButton(string label, Action onClick, bool primary = false)
     {
         var button = new Button
@@ -130,6 +150,22 @@ public sealed class ResultCard : Window
             WithButton("Kapat", Dismiss);
         Show();
         Activate();
+    }
+
+    /// <summary>
+    /// Shows the card briefly without taking focus, so the window the user works in stays active.
+    /// </summary>
+    public void ShowToast(int milliseconds = 1600)
+    {
+        ShowActivated = false;
+        Show();
+        var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(milliseconds) };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            Dismiss();
+        };
+        timer.Start();
     }
 
     /// <summary>To the right of the region if it fits, otherwise below, otherwise above; always inside the work area.</summary>

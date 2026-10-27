@@ -40,8 +40,10 @@ public sealed class RingWindow : Window
 
     private IntPtr _hwnd;
     private ScreenPoint _origin;
+    private (double X, double Y) _ringCenter;
     private int _hover = -1;
     private double _deadZonePx;
+    private double _cancelBeyondPx;
 
     public RingWindow(RingStyle style, GestureSettings settings, IReadOnlyList<RingItem> items)
     {
@@ -96,13 +98,17 @@ public sealed class RingWindow : Window
         Animate(0, 1, 0.85, 1, _style.OpenAnimationMs, new CubicEase { EasingMode = EasingMode.EaseOut });
     }
 
-    /// <summary>Selection is measured from the press point, not from where the ring ended up after sliding.</summary>
+    /// <summary>
+    /// Selection is measured from the ring's visible center, so a ring slid away from a screen edge
+    /// can still be reached in every direction; the visible center disc is the only cancel zone.
+    /// </summary>
     public void Track(ScreenPoint point)
     {
-        double dx = point.X - _origin.X, dy = point.Y - _origin.Y;
-        SetHover(RingGeometry.SliceAt(dx, dy, _items.Count, _deadZonePx));
+        var slice = SliceAt(point);
+        SetHover(slice);
 
-        var outside = Math.Sqrt(dx * dx + dy * dy) >= _deadZonePx;
+        double dx = point.X - _ringCenter.X, dy = point.Y - _ringCenter.Y;
+        var outside = slice >= 0;
         _dot.Visibility = outside ? Visibility.Visible : Visibility.Hidden;
         if (outside)
         {
@@ -120,8 +126,12 @@ public sealed class RingWindow : Window
         Animate(_root.Opacity, 0, _rootScale.ScaleX, 1.04, selected >= 0 ? 160 : 90, new CubicEase { EasingMode = EasingMode.EaseIn });
     }
 
-    public int SliceAt(ScreenPoint point) =>
-        RingGeometry.SliceAt(point.X - _origin.X, point.Y - _origin.Y, _items.Count, _deadZonePx);
+    /// <summary>-1 in the center disc and also well outside the ring: releasing far away closes it.</summary>
+    public int SliceAt(ScreenPoint point)
+    {
+        double dx = point.X - _ringCenter.X, dy = point.Y - _ringCenter.Y;
+        return Math.Sqrt(dx * dx + dy * dy) > _cancelBeyondPx ? -1 : RingGeometry.SliceAt(dx, dy, _items.Count, _deadZonePx);
+    }
 
     public RingItem ItemAt(int slice) => _items[slice];
 
@@ -132,9 +142,11 @@ public sealed class RingWindow : Window
         GetMonitorInfo(monitor, ref info);
         var scale = GetDpiForMonitor(monitor, 0, out var dpi, out _) == 0 ? dpi / 96.0 : 1.0;
         _deadZonePx = Math.Max(_style.InnerRadius * scale, _settings.DeadZonePx);
+        _cancelBeyondPx = _style.OuterRadius * scale * 1.5;
 
         var work = info.rcWork;
         var (cx, cy) = RingGeometry.FitInside(origin.X, origin.Y, _style.OuterRadius * scale, work.Left, work.Top, work.Right, work.Bottom);
+        _ringCenter = (cx, cy);
         var size = (int)Math.Round(_style.Size * scale);
         int left = (int)Math.Round(cx - size / 2.0), top = (int)Math.Round(cy - size / 2.0);
 
