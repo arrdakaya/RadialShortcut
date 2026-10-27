@@ -35,8 +35,8 @@ internal static class ScreenRecorder
         }
 
         using var stop = new CancellationTokenSource();
-        using var frame = RegionFrame.Show(rect);
-        var badge = new Badge(rect).WithStop(stop.Cancel);
+        using var frame = RegionFrame.Show(rect, RegionFrame.Ready);
+        var badge = new Badge(rect) { AtScreenTop = true }.WithStop(stop.Cancel);
         badge.Show();
         for (var i = 3; i > 0 && !stop.IsCancellationRequested; i--)
         {
@@ -51,6 +51,7 @@ internal static class ScreenRecorder
 
         Directory.CreateDirectory(AppPaths.RecordingDirectory);
         var file = Path.Combine(AppPaths.RecordingDirectory, $"Ekran kaydı {DateTime.Now:yyyy-MM-dd HHmmss}.mp4");
+        frame.Color = RegionFrame.Live;
         var clock = Stopwatch.StartNew();
         var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
         timer.Tick += (_, _) => badge.Text = $"Kaydediliyor {clock.Elapsed:mm\\:ss} · Esc";

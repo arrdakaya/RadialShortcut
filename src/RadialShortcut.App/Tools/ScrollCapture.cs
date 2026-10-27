@@ -112,6 +112,7 @@ internal static class ScrollCapture
             var file = ToolRunner.Save(image, "Uzun ekran görüntüsü");
 
             ResultCard.ForImage("Panoya kopyalandı", stopReason ?? $"{w} × {outputRows} · {matched} kaydırma eklendi, {missed} kare hizalanamadı · {Path.GetFileName(file)}", image, rect)
+                .WithButton("Dosyayı sil", () => ToolRunner.DeleteCapture(file))
                 .WithButton("Klasörde göster", () => ToolRunner.ShowInFolder(file))
                 .WithButton("Tamam", () => { }, primary: true)
                 .ShowNear();

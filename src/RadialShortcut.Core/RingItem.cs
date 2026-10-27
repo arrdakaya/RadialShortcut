@@ -9,7 +9,7 @@ public sealed record RingItem(string Id, string Label, string Title, string Hint
 
 public static class DefaultRing
 {
-    /// <summary>Clockwise from the top. The first eight form the default ring; twelve-slice rings use all of them.</summary>
+    /// <summary>Clockwise from the top. The first eight form the default ring, twelve-slice rings use twelve; the rest only through config.json.</summary>
     public static IReadOnlyList<RingItem> Items { get; } =
     [
         new("ocr", "Metin al", "Ekrandan metin al (OCR)", "Bölge seç → panoya", "M4 8V4h4 M16 4h4v4 M20 16v4h-4 M8 20H4v-4 M8 9h8 M12 9v7"),
@@ -19,11 +19,12 @@ public static class DefaultRing
         new("scroll", "Uzun", "Kaydırmalı ekran görüntüsü", "Sayfayı kaydırıp birleştir", "M6 3h12v18H6z M12 7v10 M9.5 9.5L12 7l2.5 2.5 M9.5 14.5L12 17l2.5-2.5"),
         new("record", "Kayıt", "Ekran kaydı", "Bölge → MP4 / GIF", "M12 4a8 8 0 1 0 0 16a8 8 0 1 0 0-16 M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6"),
         new("lens", "Görsel ara", "Görselle ara", "Bölge → Google Lens", "M4 8V4h4 M16 4h4v4 M20 16v4h-4 M8 20H4v-4 M11 8a3.5 3.5 0 1 0 0 7a3.5 3.5 0 1 0 0-7 M13.5 14l3 3"),
-        new("qr", "QR", "QR / barkod oku", "Bölge → panoya", "M4 4h6v6H4z M14 4h6v6h-6z M4 14h6v6H4z M14 14h2v2h-2z M18 18h2v2h-2z M14 18h2 M18 14h2"),
+        new("pin", "Sabitle", "Ekrana sabitle", "Bölge her zaman üstte kalsın", "M9 4h6 M10 4v6l-3 4h10l-3-4V4 M12 14v6"),
         new("ruler", "Ölç", "Ekran cetveli", "Piksel mesafe ölç", "M3 17L17 3l4 4L7 21z M7 13l2 2 M10 10l2 2 M13 7l2 2"),
         new("top", "Üstte tut", "Pencereyi üstte tut", "Aç / kapat", "M5 4h14 M12 20V8 M7 13l5-5 5 5"),
         new("search", "Web ara", "Seçili metni ara", "Tarayıcıda", "M11 4a7 7 0 1 0 0 14a7 7 0 1 0 0-14 M16 16l4 4"),
         new("calc", "Hesapla", "Seçili ifadeyi hesapla", "12*4+3 → 51", "M6 3h12v18H6z M9 7h6 M9 12h1 M14 12h1 M9 16h1 M14 16h1"),
+        new("qr", "QR", "QR / barkod oku", "Bölge → panoya", "M4 4h6v6H4z M14 4h6v6h-6z M4 14h6v6H4z M14 14h2v2h-2z M18 18h2v2h-2z M14 18h2 M18 14h2"),
     ];
 
     public static IReadOnlyList<RingItem> For(int sliceCount) => Items.Take(sliceCount).ToList();

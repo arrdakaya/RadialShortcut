@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Windows;
 using RadialShortcut.App.Capture;
@@ -64,27 +65,43 @@ internal static class WebTools
 
         var settings = ToolRunner.Settings;
         var target = settings.TranslateTarget.ToUpperInvariant();
-        if (string.IsNullOrWhiteSpace(settings.DeepLApiKey))
-        {
-            if (!await ConsentAsync("translate", "Ekrandan çevir", "Okunan metin Google Çeviri'de açılacak.", region.ScreenRect))
-                return;
-            var limited = text.Length > 4000 ? text[..4000] : text;
-            ToolRunner.OpenUrl($"https://translate.google.com/?sl=auto&tl={target.ToLowerInvariant()}&op=translate&text={Uri.EscapeDataString(limited)}");
-            return;
-        }
-
-        if (!await ConsentAsync("translate", "Ekrandan çevir", "Okunan metin çeviri için DeepL'e gönderilecek.", region.ScreenRect))
+        var useDeepL = !string.IsNullOrWhiteSpace(settings.DeepLApiKey);
+        if (!await ConsentAsync("translate", "Ekrandan çevir", $"Okunan metin çeviri için {(useDeepL ? "DeepL'e" : "Google Çeviri'ye")} gönderilecek.", region.ScreenRect))
             return;
 
-        var (translated, source) = await DeepLAsync(settings.DeepLApiKey, text, target);
+        Func<string, Task<(string Text, string Source)>> translate = useDeepL
+            ? t => DeepLAsync(settings.DeepLApiKey!, text, t == "EN" ? "EN-US" : t)
+            : t => GoogleAsync(text, t);
+
+        var (translated, source) = await translate(target);
         // Text already in the target language is turned into English instead, which is what the user wants then.
         if (string.Equals(source, target, StringComparison.OrdinalIgnoreCase) && target != "EN")
-            (translated, source) = await DeepLAsync(settings.DeepLApiKey, text, "EN-US");
+        {
+            target = "EN";
+            (translated, source) = await translate(target);
+        }
 
-        ResultCard.ForText($"Çeviri ({source} → {target})", translated, region.ScreenRect)
+        ResultCard.ForText($"Çeviri ({source.ToUpperInvariant()} → {target})", translated, region.ScreenRect)
             .WithButton("Orijinali kopyala", () => ToolRunner.CopyText(text))
             .WithButton("Kopyala", () => ToolRunner.CopyText(translated), primary: true)
             .ShowNear();
+    }
+
+    /// <summary>
+    /// Google Translate's keyless endpoint (the one its browser extensions use). Not an official API,
+    /// so it may change; a DeepL key in config.json is the stable alternative.
+    /// </summary>
+    private static async Task<(string Text, string Source)> GoogleAsync(string text, string target)
+    {
+        using var form = new FormUrlEncodedContent([new("q", text)]);
+        using var response = await Http.PostAsync($"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl={target.ToLowerInvariant()}&dt=t", form);
+        response.EnsureSuccessStatusCode();
+
+        // [[["çeviri","original",...], ...], null, "en", ...]
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var root = json.RootElement;
+        var translated = string.Concat(root[0].EnumerateArray().Select(part => part[0].GetString()));
+        return (translated, root[2].GetString() ?? "?");
     }
 
     private static async Task<(string Text, string Source)> DeepLAsync(string key, string text, string target)

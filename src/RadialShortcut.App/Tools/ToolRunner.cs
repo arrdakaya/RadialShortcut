@@ -40,6 +40,9 @@ public static class ToolRunner
                 case "qr":
                     await QrAsync();
                     break;
+                case "pin":
+                    await PinWindow.RunAsync();
+                    break;
                 case "picker":
                     await ColorPicker.RunAsync();
                     break;
@@ -105,9 +108,22 @@ public static class ToolRunner
         var file = Save(region.Image);
 
         ResultCard.ForImage("Panoya kopyalandı", $"{region.ScreenRect.Width} × {region.ScreenRect.Height} · {Path.GetFileName(file)}", region.Image, region.ScreenRect)
+            .WithButton("Dosyayı sil", () => DeleteCapture(file))
             .WithButton("Klasörde göster", () => ShowInFolder(file))
             .WithButton("Tamam", () => { }, primary: true)
             .ShowNear();
+    }
+
+    /// <summary>For when only the clipboard copy was wanted; the clipboard keeps the image.</summary>
+    internal static void DeleteCapture(string file)
+    {
+        try
+        {
+            File.Delete(file);
+        }
+        catch (IOException)
+        {
+        }
     }
 
     private static async Task OcrAsync()

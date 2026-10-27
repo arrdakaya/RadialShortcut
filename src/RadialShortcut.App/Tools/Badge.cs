@@ -43,7 +43,11 @@ internal sealed class Badge : Window
 
         SourceInitialized += (_, _) => Native.ExcludeFromCapture(this);
         Loaded += (_, _) => PlaceOutsideRegion();
+        SizeChanged += (_, _) => { if (IsLoaded) PlaceOutsideRegion(); };
     }
+
+    /// <summary>Top center of the region's screen instead of next to the region, where it is always seen.</summary>
+    public bool AtScreenTop { get; init; }
 
     public string Text
     {
@@ -76,6 +80,12 @@ internal sealed class Badge : Window
         var bounds = display.Bounds;
         int w = (int)Math.Ceiling(ActualWidth * display.Scale), h = (int)Math.Ceiling(ActualHeight * display.Scale);
         int gap = (int)(6 * display.Scale);
+        if (AtScreenTop)
+        {
+            // Excluded from captures, so covering the region there does no harm.
+            ScreenCapture.Place(this, display.WorkArea.X + (display.WorkArea.Width - w) / 2, display.WorkArea.Y + 2 * gap);
+            return;
+        }
         int x = _region.X + _region.Width - w;
         int y = _region.Y - h - gap;
         if (y < bounds.Y)

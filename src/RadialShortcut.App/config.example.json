@@ -19,8 +19,8 @@
         { "tool": "scroll" },
         { "tool": "record" },
         { "tool": "lens" },
-        { "tool": "qr" }
-        // Diğer araçlar: "ruler", "top", "search", "calc"
+        { "tool": "pin" }
+        // Diğer araçlar: "ruler", "top", "search", "calc", "qr"
       ]
     },
     {
