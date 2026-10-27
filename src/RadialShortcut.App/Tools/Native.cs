@@ -43,6 +43,25 @@ internal static class Native
     /// </summary>
     public static void SendCopy() => Chord(VK_CONTROL, VK_INSERT);
 
+    /// <summary>Presses the keys in order and releases them in reverse, like a person typing a shortcut.</summary>
+    public static void SendKeys(IReadOnlyList<ushort> keys) =>
+        Send([.. keys.Select(k => Key(k, false)), .. keys.Reverse().Select(k => Key(k, true))]);
+
+    /// <summary>File name of the process that owns a window ("chrome.exe"), or "" when it cannot be read.</summary>
+    public static string ProcessName(IntPtr hwnd)
+    {
+        GetWindowThreadProcessId(hwnd, out var pid);
+        try
+        {
+            using var process = System.Diagnostics.Process.GetProcessById((int)pid);
+            return process.ProcessName + ".exe";
+        }
+        catch (ArgumentException)
+        {
+            return "";
+        }
+    }
+
     public static void SendPaste() => Chord(VK_SHIFT, VK_INSERT);
 
     public static uint ClipboardSequence() => GetClipboardSequenceNumber();
@@ -82,7 +101,7 @@ internal static class Native
             ki = new KEYBDINPUT
             {
                 wVk = vk,
-                dwFlags = (up ? KEYEVENTF_KEYUP : 0) | (vk == VK_INSERT ? KEYEVENTF_EXTENDEDKEY : 0),
+                dwFlags = (up ? KEYEVENTF_KEYUP : 0) | (RadialShortcut.Core.KeyChord.IsExtended(vk) ? KEYEVENTF_EXTENDEDKEY : 0),
                 dwExtraInfo = Signature,
             },
         },
@@ -121,6 +140,7 @@ internal static class Native
     private struct INPUT { public uint type; public InputUnion u; }
 
     [DllImport("user32.dll")] private static extern IntPtr WindowFromPoint(POINT p);
+    [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
     [DllImport("user32.dll")] private static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowText(IntPtr hwnd, StringBuilder text, int max);
     [DllImport("user32.dll")] private static extern long GetWindowLongPtr(IntPtr hwnd, int index);

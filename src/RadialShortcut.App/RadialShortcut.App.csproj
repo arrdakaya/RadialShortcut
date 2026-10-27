@@ -20,4 +20,8 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="config.example.json" LogicalName="RadialShortcut.App.config.example.json" />
+  </ItemGroup>
+
 </Project>

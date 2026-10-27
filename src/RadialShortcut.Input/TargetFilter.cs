@@ -11,7 +11,8 @@ public sealed class TargetFilter
 {
     private readonly record struct ProcessInfo(string Name, bool Elevated);
 
-    private readonly HashSet<string> _excluded;
+    // Swapped whole when config.json changes; the hook thread only reads the reference.
+    private volatile HashSet<string> _excluded;
     private readonly Dictionary<uint, ProcessInfo> _cache = [];
     private readonly uint _ownPid = (uint)Environment.ProcessId;
     private readonly bool _selfElevated = Environment.IsPrivilegedProcess;
@@ -20,6 +21,9 @@ public sealed class TargetFilter
     {
         _excluded = new HashSet<string>(excludedProcesses, StringComparer.OrdinalIgnoreCase);
     }
+
+    public void SetExcluded(IEnumerable<string> processes) =>
+        _excluded = new HashSet<string>(processes, StringComparer.OrdinalIgnoreCase);
 
     public bool IsAllowed(ScreenPoint p)
     {

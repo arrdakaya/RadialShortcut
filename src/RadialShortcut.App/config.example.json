@@ -1,0 +1,71 @@
+// RadialShortcut örnek ayar dosyası. Bu dosya her açılışta yeniden yazılır; değişikliklerini
+// aynı klasördeki config.json dosyasına yap. config.json kaydedildiği anda uygulanır.
+// Satırlar // ile başlayan açıklamalar config.json içinde de kullanılabilir.
+{
+  // Sağ tuşa hiç dokunulmayan uygulamalar (oyunlar, uzak masaüstü...). ".exe" yazmak isteğe bağlı.
+  "excludedProcesses": ["mstsc", "vmconnect"],
+
+  "rings": [
+    {
+      // "match" olmayan halka genel halkadır: başka halka eşleşmeyince bu açılır.
+      // Hiç genel halka yazmazsan yerleşik araç halkası kullanılır.
+      "id": "genel",
+      "name": "Genel",
+      "slices": [
+        { "tool": "ocr" },
+        { "tool": "picker" },
+        { "tool": "translate" },
+        { "tool": "crop" },
+        { "tool": "scroll" },
+        { "tool": "record" },
+        { "tool": "lens" },
+        { "tool": "qr" }
+        // Diğer araçlar: "ruler", "top", "search", "calc"
+      ]
+    },
+    {
+      // Sadece Chrome pencerelerinde açılan halka.
+      "id": "chrome",
+      "name": "Chrome",
+      "match": { "process": "chrome" },
+      "slices": [
+        { "label": "Yeni sekme", "action": { "type": "hotkey", "keys": "Ctrl+T" } },
+        { "label": "Sekmeyi geri aç", "action": { "type": "hotkey", "keys": "Ctrl+Shift+T" } },
+        { "label": "Kapat", "action": { "type": "hotkey", "keys": "Ctrl+W" } },
+        { "label": "YouTube", "action": { "type": "url", "url": "https://www.youtube.com" } },
+        { "tool": "crop" },
+        { "tool": "lens" }
+      ]
+    },
+    {
+      // "windowTitle" bir düzenli ifadedir; başlık eşleşen halka, sadece süreç eşleşen halkadan önce gelir.
+      "id": "chrome-youtube",
+      "name": "YouTube",
+      "match": { "process": "chrome", "windowTitle": "YouTube" },
+      "slices": [
+        { "label": "Oynat/Durdur", "action": { "type": "hotkey", "keys": "PlayPause" } },
+        { "label": "Tam ekran", "action": { "type": "hotkey", "keys": "F" } },
+        { "label": "Sesi kapat", "action": { "type": "hotkey", "keys": "Mute" } },
+        { "tool": "record" }
+      ]
+    },
+    {
+      "id": "explorer",
+      "name": "Dosya Gezgini",
+      "match": { "process": "explorer" },
+      "slices": [
+        { "label": "Terminal", "action": { "type": "launch", "path": "wt.exe" } },
+        { "label": "Not Defteri", "action": { "type": "launch", "path": "notepad.exe" } },
+        { "label": "İmza", "action": { "type": "text", "text": "Saygılarımla,\nArda" } },
+        { "label": "Yeni klasör", "action": { "type": "hotkey", "keys": "Ctrl+Shift+N" } }
+      ]
+    }
+  ]
+  // Aksiyon türleri:
+  //   launch: "path" (uygulama, dosya ya da klasör), isteğe bağlı "args"
+  //   url:    "url"
+  //   hotkey: "keys", örn. "Ctrl+Shift+T", "Win+V", "Alt+F4", "F5", "PlayPause", "VolumeUp"
+  //   text:   "text" (pano üzerinden yapıştırılır, eski pano geri yüklenir)
+  // Her dilimde "label", "title", "hint" ve "icon" (24×24 SVG path) isteğe bağlıdır; aksiyonlarda label zorunlu.
+  // Bir halkada 2 ile 12 arası dilim olabilir.
+}

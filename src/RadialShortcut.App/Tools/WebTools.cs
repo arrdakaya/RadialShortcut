@@ -113,18 +113,18 @@ internal static class WebTools
         [property: JsonPropertyName("detected_source_language")] string DetectedSourceLanguage,
         [property: JsonPropertyName("text")] string Text);
 
-    /// <summary>Asks once per tool; the answer is kept in config.json.</summary>
+    /// <summary>Asks once per tool; the answer is kept in consent.json, so config.json stays as the user wrote it.</summary>
     private static async Task<bool> ConsentAsync(string tool, string title, string what, Int32Rect anchor)
     {
-        var settings = ToolRunner.Settings;
-        if (settings.InternetConsent.Contains(tool))
+        var granted = ConsentStore.Load(AppPaths.ConsentFile);
+        if (granted.Contains(tool))
             return true;
 
         if (!await ResultCard.AskAsync($"{title}: internet izni", $"{what} Bu soru bir kez sorulur.", "İzin ver", anchor))
             return false;
 
-        settings.InternetConsent.Add(tool);
-        settings.Save(AppPaths.ConfigFile);
+        granted.Add(tool);
+        ConsentStore.Save(AppPaths.ConsentFile, granted);
         return true;
     }
 }

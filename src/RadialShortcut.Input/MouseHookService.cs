@@ -38,6 +38,9 @@ public sealed class MouseHookService : IGestureSink, IDisposable
 
     public volatile bool Paused;
 
+    /// <summary>Processes where the right button is left alone; takes effect on the next press.</summary>
+    public void SetExcludedProcesses(IEnumerable<string> processes) => _filter.SetExcluded(processes);
+
     public void Start()
     {
         _thread = new Thread(Run) { IsBackground = true, Name = "RadialShortcut mouse hook" };

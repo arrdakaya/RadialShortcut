@@ -40,12 +40,15 @@ internal static class SelectionTools
         var result = Expression.Format(value, text);
         ResultCard.ForText($"{Shorten(text)} =", result, new Int32Rect(at.X, at.Y, 1, 1))
             .WithButton("Kopyala", () => ToolRunner.CopyText(result))
-            .WithButton("Yerine yaz", () => _ = ReplaceSelectionAsync(target, result), primary: true)
+            .WithButton("Yerine yaz", () => _ = PasteTextAsync(target, result), primary: true)
             .ShowNear();
     }
 
-    /// <summary>The selection is still there, so pasting replaces it.</summary>
-    private static async Task ReplaceSelectionAsync(IntPtr target, string text)
+    /// <summary>
+    /// Pastes text into a window through the clipboard and puts the user's clipboard back afterwards.
+    /// A selection that is still there is replaced.
+    /// </summary>
+    internal static async Task PasteTextAsync(IntPtr target, string text)
     {
         var saved = SaveClipboard();
         ToolRunner.CopyText(text);

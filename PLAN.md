@@ -266,10 +266,11 @@ Uygulamanın değeri basit kısayollarda değil, **ekran araçlarında**.
 - Ekrandan çevir (OCR + DeepL / tarayıcı)
 - Ekran kaydı (MP4, sonra GIF)
 - Kaydırmalı ekran görüntüsü (en son, en riskli)
-- Temel aksiyonlar: `launch`, `url`, `hotkey`, `text`, `submenu`
-- JSON yükleme, canlı yeniden yükleme, varsayılan halka
+- Temel aksiyonlar: `launch`, `url`, `hotkey`, `text` ✅ · `submenu` ertelendi (jest bitince ikinci halkayı açmak için tıklama modu gerekiyor)
+- JSON yükleme, canlı yeniden yükleme, varsayılan halka ✅ (yorumlu JSON, `config.example.json` her açılışta yazılır, internet izinleri `consent.json`'da)
 
 ### Faz 4 — Uygulamaya özel halkalar + hariç tutma (1–2 gün)
+- ✅ `match.process` + `match.windowTitle` (regex), hariç tutma listesi canlı güncellenir. Hatalı halka/dilimler atlanır, tepside uyarı.
 
 ### Faz 5 — Ayarlar penceresi (4–5 gün)
 - Görsel halka editörü, ikon seçici, tema seçimi

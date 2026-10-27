@@ -4,7 +4,8 @@ namespace RadialShortcut.Core;
 /// <param name="Title">Full name shown in the center while the slice is hovered.</param>
 /// <param name="Hint">One-line description under the title.</param>
 /// <param name="Icon">24×24 stroke-only path data (SVG/WPF mini-language).</param>
-public sealed record RingItem(string Id, string Label, string Title, string Hint, string Icon);
+/// <param name="Action">Set for user-defined slices (Id "action"); null for built-in tools.</param>
+public sealed record RingItem(string Id, string Label, string Title, string Hint, string Icon, SliceAction? Action = null);
 
 public static class DefaultRing
 {

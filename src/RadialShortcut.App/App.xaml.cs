@@ -1,4 +1,6 @@
 ﻿using System.Diagnostics;
+using System.IO;
+using System.Windows.Threading;
 using System.Windows;
 using System.Windows.Controls;
 using H.NotifyIcon;
@@ -16,7 +18,12 @@ public partial class App : Application
     private TaskbarIcon? _tray;
     private MouseHookService? _hook;
     private DebugOverlay? _debug;
-    private RingWindow? _ring;
+    private GestureSettings _settings = new();
+    private RingCatalog _catalog = new([], 8);
+    private readonly Dictionary<string, RingWindow> _rings = [];
+    private RingWindow? _ring; // The ring of the current gesture.
+    private FileSystemWatcher? _configWatcher;
+    private DispatcherTimer? _reloadTimer;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -40,21 +47,101 @@ public partial class App : Application
         var startupItem = (MenuItem)_tray.ContextMenu!.Items.OfType<MenuItem>().Single(i => i.Name == "StartupItem");
         startupItem.IsChecked = StartupRegistration.IsEnabled();
 
-        var settings = new GestureSettings();
-        _debug = new DebugOverlay(settings);
+        _debug = new DebugOverlay(_settings);
         _debug.Show();
 
-        _ring = new RingWindow(new RingStyle(), settings, DefaultRing.For(settings.SliceCount));
-        _ring.Show();
-
-        _hook = new MouseHookService(settings);
+        _hook = new MouseHookService(_settings);
         _hook.Event += ev => Dispatcher.BeginInvoke(() => OnGesture(ev));
+        LoadConfig(startup: true);
         _hook.Start();
+        WatchConfig();
+    }
+
+    /// <summary>
+    /// Reads config.json and rebuilds the rings. A file that does not parse leaves the last good
+    /// rings in place (PLAN.md, section 9); either way problems are shown in a tray notice.
+    /// </summary>
+    private void LoadConfig(bool startup = false)
+    {
+        WriteExampleConfig();
+        if (!UserSettings.TryLoad(AppPaths.ConfigFile, out var config, out var error))
+        {
+            _tray?.ShowNotification("config.json okunamadı", $"{error}\nSon geçerli ayarlar kullanılıyor.");
+            return;
+        }
+
+        _hook?.SetExcludedProcesses(config.ExcludedProcesses?.Select(RingCatalog.ProcessName) ?? _settings.ExcludedProcesses);
+
+        _catalog = new RingCatalog(config.Rings, _settings.SliceCount);
+        foreach (var window in _rings.Values)
+            window.Close();
+        _rings.Clear();
+        // Built ahead of time so the first open of a ring is as quick as the rest.
+        foreach (var ring in _catalog.All)
+        {
+            var window = new RingWindow(new RingStyle(), _settings, ring.Items);
+            window.Show();
+            _rings[ring.Id] = window;
+        }
+
+        if (_catalog.Warnings.Count > 0)
+            _tray?.ShowNotification("config.json: bazı halkalar atlandı", string.Join("\n", _catalog.Warnings.Take(4)));
+        else if (!startup)
+            _tray?.ShowNotification("Ayarlar yüklendi", $"{_rings.Count} halka hazır.");
+    }
+
+    /// <summary>Hand edits apply right away; saves come in bursts, so wait for them to settle.</summary>
+    private void WatchConfig()
+    {
+        _reloadTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(400) };
+        _reloadTimer.Tick += (_, _) =>
+        {
+            _reloadTimer.Stop();
+            LoadConfig();
+        };
+
+        _configWatcher = new FileSystemWatcher(AppPaths.ConfigDirectory, "config.json")
+        {
+            NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.Size,
+            EnableRaisingEvents = true,
+        };
+        FileSystemEventHandler restart = (_, _) => Dispatcher.BeginInvoke(() =>
+        {
+            _reloadTimer.Stop();
+            _reloadTimer.Start();
+        });
+        _configWatcher.Changed += restart;
+        _configWatcher.Created += restart;
+        _configWatcher.Renamed += (s, e) => restart(s, e);
+    }
+
+    /// <summary>A reference for hand-editing until the settings window exists (Faz 5); rewritten on every start.</summary>
+    private static void WriteExampleConfig()
+    {
+        try
+        {
+            var example = Path.Combine(AppPaths.ConfigDirectory, "config.example.json");
+            using var stream = typeof(App).Assembly.GetManifestResourceStream("RadialShortcut.App.config.example.json")!;
+            using var reader = new StreamReader(stream);
+            var text = reader.ReadToEnd();
+            if (!File.Exists(example) || File.ReadAllText(example) != text)
+                File.WriteAllText(example, text);
+        }
+        catch (IOException)
+        {
+        }
     }
 
     private void OnGesture(GestureEvent ev)
     {
         _debug?.Show(ev);
+        if (ev.Kind == GestureEventKind.RingOpened)
+        {
+            // The ring follows the window that was right-clicked, not the one with focus (PLAN.md, section 8).
+            var target = Native.WindowAt(ev.Origin.X, ev.Origin.Y);
+            var ring = _catalog.For(Native.ProcessName(target), Native.WindowTitle(target));
+            _ring = _rings.GetValueOrDefault(ring.Id) ?? _rings[_catalog.Global.Id];
+        }
         if (_ring is null)
             return;
 
@@ -87,6 +174,7 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _configWatcher?.Dispose();
         _hook?.Dispose();
         _tray?.Dispose();
         _singleInstance?.ReleaseMutex();

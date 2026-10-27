@@ -3,8 +3,8 @@ using System.Text.Json;
 namespace RadialShortcut.Core;
 
 /// <summary>
-/// The part of config.json the tools need before the settings window exists (Faz 5).
-/// Edited by hand for now.
+/// What the app reads from config.json: tool options, excluded processes and rings.
+/// Edited by hand until the settings window exists (Faz 5); the app never writes it.
 /// </summary>
 public sealed class UserSettings
 {
@@ -14,26 +14,45 @@ public sealed class UserSettings
     /// <summary>Target language for "translate", as a DeepL / Google code.</summary>
     public string TranslateTarget { get; set; } = "TR";
 
-    /// <summary>Tool ids the user has allowed to send data over the internet.</summary>
-    public List<string> InternetConsent { get; set; } = [];
+    /// <summary>Processes where the right button is left alone; null keeps the built-in list.</summary>
+    public List<string>? ExcludedProcesses { get; set; }
 
-    private static readonly JsonSerializerOptions Json = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = true };
+    /// <summary>The global ring (no match) and app-specific rings; empty means the built-in tool ring.</summary>
+    public List<RingConfig> Rings { get; set; } = [];
 
-    public static UserSettings Load(string file)
+    private static readonly JsonSerializerOptions Json = new()
     {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true,
+        ReadCommentHandling = JsonCommentHandling.Skip,
+        AllowTrailingCommas = true,
+    };
+
+    public static UserSettings Load(string file) => TryLoad(file, out var settings, out _) ? settings : new();
+
+    /// <summary>False with a readable reason when the file cannot be used; a missing file is fine.</summary>
+    public static bool TryLoad(string file, out UserSettings settings, out string? error)
+    {
+        settings = new();
+        error = null;
         try
         {
-            return File.Exists(file) ? JsonSerializer.Deserialize<UserSettings>(File.ReadAllText(file), Json) ?? new() : new();
+            if (File.Exists(file))
+                settings = Parse(File.ReadAllText(file));
+            return true;
         }
-        catch (JsonException)
+        catch (JsonException e)
         {
-            return new(); // A hand-edited file with a typo must not stop the app.
+            // A hand-edited file with a typo must not stop the app.
+            error = e.LineNumber is { } line ? $"{line + 1}. satırda hata: {e.Message}" : e.Message;
+            return false;
+        }
+        catch (IOException e)
+        {
+            error = e.Message;
+            return false;
         }
     }
 
-    public void Save(string file)
-    {
-        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
-        File.WriteAllText(file, JsonSerializer.Serialize(this, Json));
-    }
+    public static UserSettings Parse(string json) => JsonSerializer.Deserialize<UserSettings>(json, Json) ?? new();
 }

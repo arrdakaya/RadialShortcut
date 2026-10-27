@@ -67,6 +67,9 @@ public static class ToolRunner
                 case "scroll":
                     await ScrollCapture.RunAsync();
                     break;
+                case "action" when item.Action is { } action:
+                    await ActionRunner.RunAsync(action, target);
+                    break;
                 default:
                     ResultCard.Near(point, item.Title, "Bu araç henüz hazır değil.").ShowNear();
                     break;
