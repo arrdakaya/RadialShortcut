@@ -19,6 +19,7 @@ internal static class FileJobs
         badge.Show();
 
         var outputs = new List<string>();
+        _extra = [];
         var failures = new List<string>();
         try
         {
@@ -49,6 +50,8 @@ internal static class FileJobs
         {
             badge.Close();
         }
+        var extra = _extra;
+        _extra = null;
 
         if (outputs.Count == 0 && failures.Count == 0)
             return;
@@ -68,11 +71,24 @@ internal static class FileJobs
         if (outputs.Count > 0)
         {
             var first = outputs[0];
+            card.WithButton("Sil", () => ToolRunner.ConfirmDelete([.. outputs, .. extra], anchor));
             card.WithButton("Klasörde göster", () => ToolRunner.ShowInFolder(first));
             if (outputs.Count == 1)
                 card.WithButton("Aç", () => ToolRunner.OpenUrl(first));
         }
         card.WithButton("Tamam", () => { }, primary: true).ShowNear();
+    }
+
+    private static List<string>? _extra;
+
+    /// <summary>
+    /// A file a job made besides the one it returns (the other pages of a PDF): it goes into the
+    /// history and is deleted along with the rest from the card.
+    /// </summary>
+    public static void AlsoMade(string tool, string file)
+    {
+        _extra?.Add(file);
+        ToolRunner.Remember(tool, file);
     }
 
     /// <summary>Next to the input when that folder can be written to, otherwise Documents\RadialShortcut\Dosyalar.</summary>

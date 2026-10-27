@@ -105,7 +105,7 @@ internal sealed class AnnotateWindow : Window
         foreach (var (tool, label) in new[] { (Tool.Arrow, "Ok"), (Tool.Box, "Kutu"), (Tool.Pen, "Kalem"), (Tool.Blur, "Bulanık"), (Tool.Text, "Metin"), (Tool.Crop, "Kırp") })
         {
             var button = new ToggleButton { Content = label, IsChecked = tool == _tool, Focusable = false };
-            Style(button);
+            StyleButton(button);
             button.Click += (_, _) =>
             {
                 _tool = tool;
@@ -136,7 +136,7 @@ internal sealed class AnnotateWindow : Window
         return bar;
     }
 
-    private static void Style(ButtonBase button)
+    private static void StyleButton(ButtonBase button)
     {
         button.Margin = new Thickness(0, 0, 4, 6);
         button.Padding = new Thickness(10, 4, 10, 4);
@@ -148,7 +148,7 @@ internal sealed class AnnotateWindow : Window
     private static Button Action(string label, Action onClick, bool primary = false)
     {
         var button = new Button { Content = label, Focusable = false };
-        Style(button);
+        StyleButton(button);
         if (primary)
         {
             button.Background = Palette.Accent;
@@ -386,6 +386,7 @@ internal sealed class AnnotateWindow : Window
         var anchor = new Int32Rect((int)Left, (int)Top, (int)ActualWidth, (int)ActualHeight);
         Close();
         ResultCard.ForImage("Kaydedildi ve kopyalandı", IOPath.GetFileName(file), image, anchor)
+            .WithButton("Sil", () => ToolRunner.ConfirmDelete([file], anchor))
             .WithButton("Klasörde göster", () => ToolRunner.ShowInFolder(file))
             .WithButton("Tamam", () => { }, primary: true)
             .ShowNear();

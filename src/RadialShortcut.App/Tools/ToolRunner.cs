@@ -275,6 +275,34 @@ public static class ToolRunner
 
     internal static void CopyText(string text) => Retry(() => Clipboard.SetText(text));
 
+    internal static void TryDelete(string file)
+    {
+        try
+        {
+            File.Delete(file);
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
+    }
+
+    /// <summary>Asks first, then deletes; a file that is still open somewhere is reported, not skipped silently.</summary>
+    internal static async void ConfirmDelete(IReadOnlyList<string> files, Int32Rect anchor)
+    {
+        var what = files.Count == 1 ? Path.GetFileName(files[0]) : $"{files.Count} dosya";
+        if (!await ResultCard.AskAsync("Silinsin mi?", what, "Sil", anchor))
+            return;
+        foreach (var file in files)
+            ToolRunner.TryDelete(file);
+        var left = files.Where(File.Exists).ToList();
+        if (left.Count > 0)
+            ResultCard.ForMessage("Silinemedi", $"{Path.GetFileName(left[0])} başka bir uygulamada açık olabilir.", anchor)
+                .WithButton("Tamam", () => { }, primary: true).ShowNear();
+    }
+
     internal static void Retry(Action action)
     {
         for (var i = 0; ; i++)

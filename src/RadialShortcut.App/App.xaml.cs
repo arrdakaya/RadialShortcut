@@ -57,11 +57,20 @@ public partial class App : Application
 
         _hook = new MouseHookService(_settings);
         _hook.Event += ev => Dispatcher.BeginInvoke(() => OnGesture(ev));
+        _hook.ShiftDragStarted += start => Dispatcher.BeginInvoke(() =>
+        {
+            // Only drags that start in Explorer or on the desktop can be carrying files.
+            var source = Native.WindowAt(start.X, start.Y);
+            if (SelectedFiles.IsExplorer(source) || SelectedFiles.IsDesktop(source))
+                DropZones.ShowAt(start);
+        });
+        _hook.DragEnded += () => Dispatcher.BeginInvoke(DropZones.EndDrag);
         _hotkey = new HotkeyRing(OpenFromHotkey, Release);
         LoadConfig(startup: true);
         StartUpdateChecks();
         _hook.Start();
         WatchConfig();
+        Dispatcher.BeginInvoke(SelectedFiles.WarmUp, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
     }
 
     /// <summary>
@@ -155,7 +164,7 @@ public partial class App : Application
             var target = Native.WindowAt(ev.Origin.X, ev.Origin.Y);
             // Shift picks the other layer: over files selected in Explorer the file ring is the default.
             // Checked here, on the UI thread, so the hook callback stays fast.
-            var files = SelectedFiles.IsExplorer(target) && SelectedFiles.InExplorer(target).Count > 0;
+            var files = SelectedFiles.IsExplorer(target) && SelectedFiles.HasSelection(target);
             var layer = files != Native.IsShiftDown() ? RingLayers.Files : RingLayers.Main;
             _ring = RingFor(target, layer);
         }

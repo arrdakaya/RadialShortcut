@@ -28,6 +28,7 @@ internal sealed class LibraryWindow : Window
     private readonly ListBox _list = new() { BorderThickness = new Thickness(0), Background = Brushes.Transparent, HorizontalContentAlignment = HorizontalAlignment.Stretch };
     private readonly TextBlock _count = new() { FontSize = 11, Margin = new Thickness(2, 6, 0, 0) };
     private List<HistoryEntry> _all = [];
+    private readonly Dictionary<string, BitmapSource> _thumbs = new(StringComparer.OrdinalIgnoreCase);
 
     public static void ShowOrActivate()
     {
@@ -122,6 +123,8 @@ internal sealed class LibraryWindow : Window
             }
         }
         _all = entries.OrderByDescending(e => e.Time).ToList();
+        _thumbs.Clear(); // a deleted file can come back under the same name
+
         Filter();
     }
 
@@ -134,19 +137,25 @@ internal sealed class LibraryWindow : Window
         _count.Text = shown.Count == _all.Count ? $"{_all.Count} kayıt" : $"{shown.Count} / {_all.Count} kayıt";
     }
 
-    private static FrameworkElement Row(HistoryEntry entry)
+    private FrameworkElement Row(HistoryEntry entry)
     {
         var thumb = new Border { Width = 56, Height = 40, Margin = new Thickness(0, 2, 10, 2), Background = Palette.Raised, CornerRadius = new CornerRadius(4) };
         if (entry.Path is { } path && MediaKinds.Of(path) == MediaKind.Image)
         {
             try
             {
-                var image = new BitmapImage();
-                image.BeginInit();
-                image.UriSource = new Uri(path);
-                image.DecodePixelWidth = 112; // small decode: the list stays light with hundreds of shots
-                image.CacheOption = BitmapCacheOption.OnLoad;
-                image.EndInit();
+                // Kept for the life of the window, so typing in the search box does not decode them again.
+                if (!_thumbs.TryGetValue(path, out var image))
+                {
+                    var decoded = new BitmapImage();
+                    decoded.BeginInit();
+                    decoded.UriSource = new Uri(path);
+                    decoded.DecodePixelWidth = 112; // small decode: the list stays light with hundreds of shots
+                    decoded.CacheOption = BitmapCacheOption.OnLoad;
+                    decoded.EndInit();
+                    decoded.Freeze();
+                    _thumbs[path] = image = decoded;
+                }
                 thumb.Child = new Image { Source = image, Stretch = Stretch.UniformToFill };
             }
             catch (Exception e) when (e is IOException or NotSupportedException or ArgumentException)
@@ -206,7 +215,7 @@ internal sealed class LibraryWindow : Window
         var anchor = new Int32Rect((int)Left, (int)Top, (int)ActualWidth, 1);
         if (!await ResultCard.AskAsync("Dosya silinsin mi?", Path.GetFileName(path), "Sil", anchor))
             return;
-        Ffmpeg.TryDelete(path);
+        ToolRunner.TryDelete(path);
         Reload();
     }
 

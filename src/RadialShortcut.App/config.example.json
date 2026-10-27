@@ -6,6 +6,15 @@
   // Tam ekran pencerelerde ve imleci kilitleyen oyunlarda halka zaten açılmaz.
   "excludedProcesses": ["mstsc", "vmconnect"],
 
+  // Klavyeden halka: basılı tut, imleçle dilime git, son tuşu bırak. Shift eklersen dosya halkası açılır.
+  "ringHotkey": "Ctrl+Alt+Space",
+
+  // Kartların ve araç pencerelerinin teması: "system", "light" ya da "dark".
+  "theme": "system",
+
+  // Güncellemelerin alınacağı GitHub deposu ("kullanıcı/depo"). Boş bırakırsan güncelleme denetlenmez.
+  "updateRepo": "",
+
   "rings": [
     {
       // "layer": "files" olan halkalar Shift + sağ tuş basılı tutunca açılır (dosya halkası).

@@ -59,25 +59,11 @@ internal static partial class Ffmpeg
 
         if (cancel.IsCancellationRequested || process.ExitCode != 0)
         {
-            TryDelete(output);
+            ToolRunner.TryDelete(output);
             cancel.ThrowIfCancellationRequested();
             // The useful part of an ffmpeg error is its last lines.
             var last = errors.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).TakeLast(2);
             throw new InvalidOperationException("ffmpeg: " + string.Join(" ", last));
-        }
-    }
-
-    internal static void TryDelete(string file)
-    {
-        try
-        {
-            File.Delete(file);
-        }
-        catch (IOException)
-        {
-        }
-        catch (UnauthorizedAccessException)
-        {
         }
     }
 

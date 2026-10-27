@@ -130,7 +130,7 @@ internal static class ToolDeps
         }
         finally
         {
-            Tools.Ffmpeg.TryDelete(part);
+            ToolRunner.TryDelete(part);
         }
     }
 

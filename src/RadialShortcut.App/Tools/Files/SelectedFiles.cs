@@ -7,7 +7,10 @@ namespace RadialShortcut.App.Tools;
 /// <summary>The files the file tools work on: selected in Explorer or on the desktop, or picked in a dialog.</summary>
 internal static class SelectedFiles
 {
-    private static object? _shell;
+    [ThreadStatic] private static object? _shell; // one per thread: the UI thread and the worker each keep their own
+
+    /// <summary>Files dropped on a <see cref="DropZones"/> tile; the next tool takes them instead of the selection.</summary>
+    public static List<string>? Dropped;
 
     public static bool IsExplorer(IntPtr hwnd) => Native.ClassName(hwnd) == "CabinetWClass";
 
@@ -17,26 +20,76 @@ internal static class SelectedFiles
     /// The selection in an Explorer window, through the Shell's own automation object. With tabs
     /// (Windows 11) all tabs share the window; the first one with a selection wins.
     /// </summary>
-    public static List<string> InExplorer(IntPtr hwnd)
+    public static List<string> InExplorer(IntPtr hwnd) => Read(hwnd, countOnly: false).Paths;
+
+    /// <summary>
+    /// Whether files (not just folders) are selected. Asked on every ring open, so it runs on its own
+    /// thread and gives up after a short wait: a busy or hung Explorer then opens the main ring
+    /// instead of holding the ring back.
+    /// </summary>
+    public static bool HasSelection(IntPtr hwnd)
+    {
+        var answer = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        Worker.Add(() => answer.SetResult(Read(hwnd, countOnly: true).Count > 0));
+        return answer.Task.Wait(150) && answer.Task.Result;
+    }
+
+    /// <summary>Creates the Shell object on the worker ahead of the first ring open.</summary>
+    public static void WarmUp() => Worker.Add(() => Read(IntPtr.Zero, countOnly: true));
+
+    private static readonly System.Collections.Concurrent.BlockingCollection<Action> Worker = StartWorker();
+
+    private static System.Collections.Concurrent.BlockingCollection<Action> StartWorker()
+    {
+        var queue = new System.Collections.Concurrent.BlockingCollection<Action>();
+        var thread = new Thread(() =>
+        {
+            foreach (var work in queue.GetConsumingEnumerable())
+                work();
+        }) { IsBackground = true, Name = "RadialShortcut shell" };
+        thread.SetApartmentState(ApartmentState.STA); // Shell automation objects want an STA
+        thread.Start();
+        return queue;
+    }
+
+    private static (List<string> Paths, int Count) Read(IntPtr hwnd, bool countOnly)
     {
         var paths = new List<string>();
+        var count = 0;
         try
         {
             dynamic shell = _shell ??= Activator.CreateInstance(Type.GetTypeFromProgID("Shell.Application")!)!;
             foreach (dynamic window in shell.Windows())
             {
-                if (paths.Count > 0)
+                if (count > 0)
                     break;
                 try
                 {
                     if ((IntPtr)(long)window.HWND != hwnd)
                         continue;
-                    foreach (dynamic item in window.Document.SelectedItems())
+                    dynamic items = window.Document.SelectedItems();
+                    if (countOnly)
+                    {
+                        // Only the first few: enough to tell files from a folder-only selection.
+                        var seen = 0;
+                        foreach (dynamic item in items)
+                        {
+                            if (++seen > 8 || count > 0)
+                                break;
+                            if (!(bool)item.IsFolder && (bool)item.IsFileSystem)
+                                count = 1;
+                        }
+                        if (count == 0)
+                            continue;
+                        break;
+                    }
+                    foreach (dynamic item in items)
                     {
                         string path = item.Path;
                         if (File.Exists(path))
                             paths.Add(path);
                     }
+                    count = paths.Count;
                 }
                 catch (Exception e) when (e is System.Runtime.InteropServices.COMException or Microsoft.CSharp.RuntimeBinder.RuntimeBinderException)
                 {
@@ -48,7 +101,7 @@ internal static class SelectedFiles
         {
             _shell = null;
         }
-        return paths;
+        return (paths, count);
     }
 
     /// <summary>
@@ -67,7 +120,8 @@ internal static class SelectedFiles
 
     /// <summary>The Explorer or desktop selection under the ring; empty anywhere else.</summary>
     public static async Task<List<string>> SelectionOnlyAsync(IntPtr target) =>
-        IsExplorer(target) ? InExplorer(target)
+        Interlocked.Exchange(ref Dropped, null) is { } dropped ? dropped
+        : IsExplorer(target) ? InExplorer(target)
         : IsDesktop(target) ? await OnDesktopAsync(target)
         : [];
 

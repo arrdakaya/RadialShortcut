@@ -36,6 +36,17 @@ public sealed class MouseHookService : IGestureSink, IDisposable
 
     public event Action<GestureEvent>? Event;
 
+    /// <summary>
+    /// Shift held while the left button drags past a few pixels: raised once per drag, on the hook
+    /// thread, with the press point. <see cref="DragEnded"/> follows when the button comes up.
+    /// </summary>
+    public event Action<ScreenPoint>? ShiftDragStarted;
+
+    public event Action? DragEnded;
+
+    private ScreenPoint? _leftDown;
+    private bool _dragRaised;
+
     public volatile bool Paused;
 
     /// <summary>Processes where the right button is left alone; takes effect on the next press.</summary>
@@ -111,7 +122,37 @@ public sealed class MouseHookService : IGestureSink, IDisposable
         return CallNextHookEx(_hook, nCode, wParam, lParam);
     }
 
-    private bool Handle(int message, ScreenPoint p) => message switch
+    private bool Handle(int message, ScreenPoint p)
+    {
+        WatchShiftDrag(message, p);
+        return Dispatch(message, p);
+    }
+
+    private void WatchShiftDrag(int message, ScreenPoint p)
+    {
+        switch (message)
+        {
+            case WM_LBUTTONDOWN:
+                _leftDown = p;
+                _dragRaised = false;
+                break;
+            case WM_LBUTTONUP:
+                _leftDown = null;
+                if (_dragRaised)
+                {
+                    _dragRaised = false;
+                    DragEnded?.Invoke();
+                }
+                break;
+            case WM_MOUSEMOVE when _leftDown is { } start && !_dragRaised && !Paused
+                && Math.Abs(p.X - start.X) + Math.Abs(p.Y - start.Y) > 12 && (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0:
+                _dragRaised = true;
+                ShiftDragStarted?.Invoke(start);
+                break;
+        }
+    }
+
+    private bool Dispatch(int message, ScreenPoint p) => message switch
     {
         WM_RBUTTONDOWN => _machine.OnRightDown(p, !Paused && _filter.IsAllowed(p)),
         WM_RBUTTONUP => _machine.OnRightUp(p),

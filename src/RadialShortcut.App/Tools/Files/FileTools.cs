@@ -193,7 +193,7 @@ internal static class FileTools
         // Already well compressed: a "smaller" copy that is bigger helps nobody.
         if (new FileInfo(output).Length >= new FileInfo(input).Length)
         {
-            Ffmpeg.TryDelete(output);
+            ToolRunner.TryDelete(output);
             throw new InvalidOperationException("zaten yeterince küçük, daha da küçülmedi.");
         }
         return output;
@@ -249,7 +249,7 @@ internal static class FileTools
         }
         finally
         {
-            Ffmpeg.TryDelete(temp);
+            ToolRunner.TryDelete(temp);
         }
     }
 
@@ -291,9 +291,10 @@ internal static class FileTools
             var image = BitmapFrame.Create(stream.AsStream(), BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
             var output = FileJobs.OutputFor(input, $"-{i + 1}", to);
             ImageIO.Save(image, output);
-            first ??= output;
-            if (i > 0)
-                ToolRunner.Remember("convert", output);
+            if (first is null)
+                first = output;
+            else
+                FileJobs.AlsoMade("convert", output);
         }
         return first;
     }

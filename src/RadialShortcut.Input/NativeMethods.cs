@@ -61,6 +61,11 @@ internal static class NativeMethods
     [DllImport("user32.dll")]
     public static extern bool GetMonitorInfo(IntPtr monitor, ref MONITORINFO info);
 
+    public const int VK_SHIFT = 0x10;
+
+    [DllImport("user32.dll")]
+    public static extern short GetAsyncKeyState(int key);
+
     [DllImport("user32.dll")]
     public static extern bool IsZoomed(IntPtr hWnd);
 
