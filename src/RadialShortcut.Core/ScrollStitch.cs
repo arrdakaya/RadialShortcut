@@ -57,9 +57,14 @@ public static class ScrollStitch
         return best.Shift == 0 ? null : new ScrollMatch(best.Shift, top, bottom);
     }
 
-    /// <summary>A 64-bit FNV-1a hash of each row of a 32-bit image.</summary>
-    public static ulong[] RowHashes(ReadOnlySpan<byte> pixels, int width, int height, int stride)
+    /// <summary>
+    /// A 64-bit FNV-1a hash of each row of a 32-bit image. The rightmost <paramref name="skipRight"/> columns
+    /// are left out: a scrollbar there changes on every step (overlay scrollbars even appear while scrolling)
+    /// and would make every row differ.
+    /// </summary>
+    public static ulong[] RowHashes(ReadOnlySpan<byte> pixels, int width, int height, int stride, int skipRight = 0)
     {
+        width = Math.Max(1, width - skipRight);
         var hashes = new ulong[height];
         for (var y = 0; y < height; y++)
         {

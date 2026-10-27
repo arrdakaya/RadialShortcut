@@ -1,9 +1,9 @@
+using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
-using System.Text.RegularExpressions;
 using System.Windows;
 using RadialShortcut.App.Capture;
 using RadialShortcut.Core;
@@ -13,7 +13,7 @@ namespace RadialShortcut.App.Tools;
 /// <summary>
 /// The two tools that send data over the internet (PLAN.md, section 7). Each asks once before its first use.
 /// </summary>
-internal static partial class WebTools
+internal static class WebTools
 {
     private static readonly HttpClient Http = new(new HttpClientHandler { AllowAutoRedirect = false }) { Timeout = TimeSpan.FromSeconds(12) };
 
@@ -24,54 +24,36 @@ internal static partial class WebTools
         if (!await ConsentAsync("lens", "Görselle ara", "Seçtiğin görüntü Google Lens'e gönderilecek.", region.ScreenRect))
             return;
 
-        string? url = null;
-        try
-        {
-            url = await UploadToLensAsync(ToolRunner.Png(region.Image));
-        }
-        catch (Exception e) when (e is HttpRequestException or TaskCanceledException)
-        {
-        }
-
-        if (url is not null)
-        {
-            ToolRunner.OpenUrl(url);
-            return;
-        }
-
-        // The upload address is not an official API and may change; this path always works.
+        // Uploading from here gives a results link bound to our own session, which the browser cannot open.
+        // A local page that posts the image itself makes the upload belong to the browser's session.
+        var page = Path.Combine(Path.GetTempPath(), "RadialShortcut-lens.html");
+        File.WriteAllText(page, LensPage(Convert.ToBase64String(ToolRunner.Png(region.Image))));
         ToolRunner.CopyImage(region.Image);
-        ToolRunner.OpenUrl("https://lens.google.com/");
-        ResultCard.ForMessage("Görüntü panoya kopyalandı", "Google Lens açıldı; sayfada Ctrl+V ile yapıştır.", region.ScreenRect).ShowNear();
+        ToolRunner.OpenUrl(page);
     }
 
     /// <summary>
-    /// Posts the image the way lens.google.com's own upload form does. Google answers with a redirect
-    /// to the results page, or with a page that contains its address.
+    /// Fills lens.google.com's own upload form with the image and submits it. If the browser refuses to
+    /// set the file, the page says to paste the image (already on the clipboard) instead.
     /// </summary>
-    private static async Task<string?> UploadToLensAsync(byte[] png)
-    {
-        var stamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        using var form = new MultipartFormDataContent();
-        var image = new ByteArrayContent(png);
-        image.Headers.ContentType = new MediaTypeHeaderValue("image/png");
-        form.Add(image, "encoded_image", "image.png");
-
-        using var request = new HttpRequestMessage(HttpMethod.Post, $"https://lens.google.com/v3/upload?hl=tr&re=df&st={stamp}&ep=gsbubb") { Content = form };
-        request.Headers.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36");
-        using var response = await Http.SendAsync(request);
-
-        if ((int)response.StatusCode is >= 300 and < 400 && response.Headers.Location is { } location)
-            return new Uri(new Uri("https://lens.google.com/"), location).AbsoluteUri;
-        if (!response.IsSuccessStatusCode)
-            return null;
-
-        var match = LensResultUrl().Match(await response.Content.ReadAsStringAsync());
-        return match.Success ? WebUtility.HtmlDecode(Regex.Unescape(match.Value)) : null;
-    }
-
-    [GeneratedRegex(@"https://lens\.google\.com/search\?[^""'\s<>]+")]
-    private static partial Regex LensResultUrl();
+    private static string LensPage(string base64) => $$"""
+        <!doctype html><meta charset="utf-8"><title>Google Lens</title>
+        <body style="font:15px Segoe UI,sans-serif;margin:40px">
+        <p id="msg">Google Lens'e gönderiliyor…</p>
+        <form id="f" method="post" enctype="multipart/form-data" action="https://lens.google.com/v3/upload?hl=tr&ep=gsbubb&st={{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}">
+        <input type="file" name="encoded_image" id="i" hidden></form>
+        <script>
+        try {
+          const bytes = Uint8Array.from(atob("{{base64}}"), c => c.charCodeAt(0));
+          const dt = new DataTransfer();
+          dt.items.add(new File([bytes], "image.png", { type: "image/png" }));
+          document.getElementById("i").files = dt.files;
+          document.getElementById("f").submit();
+        } catch (e) {
+          document.getElementById("msg").innerHTML = 'Görüntü panoya kopyalandı. <a href="https://lens.google.com/">Google Lens</a> sayfasında Ctrl+V ile yapıştır.';
+        }
+        </script>
+        """;
 
     public static async Task TranslateAsync()
     {

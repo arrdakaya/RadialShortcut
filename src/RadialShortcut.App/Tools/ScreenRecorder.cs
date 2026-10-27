@@ -78,14 +78,21 @@ internal static class ScreenRecorder
         var frames = new BlockingCollection<(byte[] Pixels, TimeSpan Time)>(boundedCapacity: Fps * 2);
 
         var input = VideoEncodingProperties.CreateUncompressed(MediaEncodingSubtypes.Bgra8, (uint)rect.Width, (uint)rect.Height);
+        input.FrameRate.Numerator = Fps;
+        input.FrameRate.Denominator = 1;
         var source = new MediaStreamSource(new VideoStreamDescriptor(input)) { BufferTime = TimeSpan.Zero, CanSeek = false };
         source.Starting += (_, e) => e.Request.SetActualStartPosition(TimeSpan.Zero);
         source.SampleRequested += (_, e) =>
         {
             // Blocks the encoder's thread until the next frame; a null sample ends the stream.
-            e.Request.Sample = frames.TryTake(out var frame, Timeout.Infinite)
-                ? MediaStreamSample.CreateFromBuffer(frame.Pixels.AsBuffer(), frame.Time)
-                : null;
+            if (!frames.TryTake(out var frame, Timeout.Infinite))
+            {
+                e.Request.Sample = null;
+                return;
+            }
+            var sample = MediaStreamSample.CreateFromBuffer(frame.Pixels.AsBuffer(), frame.Time);
+            sample.Duration = TimeSpan.FromSeconds(1.0 / Fps);
+            e.Request.Sample = sample;
         };
 
         var profile = MediaEncodingProfile.CreateMp4(VideoEncodingQuality.Auto);
@@ -97,9 +104,12 @@ internal static class ScreenRecorder
         // About 0.1 bit per pixel per frame: crisp text without huge files (≈6 Mbit/s at 1080p).
         profile.Video.Bitrate = (uint)Math.Clamp(rect.Width * rect.Height * Fps / 10, 1_000_000, 40_000_000);
 
-        await using var stream = File.Create(file);
+        // Media Foundation wants a native WinRT stream; the .NET stream wrapper fails with some encoders.
+        File.WriteAllBytes(file, []);
+        var storage = await Windows.Storage.StorageFile.GetFileFromPathAsync(file);
+        using var stream = await storage.OpenAsync(Windows.Storage.FileAccessMode.ReadWrite);
         var transcoder = new MediaTranscoder { HardwareAccelerationEnabled = true };
-        var prepared = await transcoder.PrepareMediaStreamSourceTranscodeAsync(source, stream.AsRandomAccessStream(), profile);
+        var prepared = await transcoder.PrepareMediaStreamSourceTranscodeAsync(source, stream, profile);
         if (!prepared.CanTranscode)
             throw new InvalidOperationException($"Kodlayıcı hazırlanamadı ({prepared.FailureReason}).");
 

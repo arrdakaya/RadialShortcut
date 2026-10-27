@@ -74,7 +74,15 @@ public static class ToolRunner
         }
         catch (Exception e)
         {
-            ResultCard.Near(ScreenCapture.CursorPosition(), $"{item.Title}: hata", e.Message).ShowNear();
+            // The card shows the short message; the log keeps the details for a bug report.
+            try
+            {
+                File.AppendAllText(Path.Combine(AppPaths.ConfigDirectory, "error.log"), $"[{DateTime.Now:u}] {item.Id}: {e}{Environment.NewLine}{Environment.NewLine}");
+            }
+            catch (IOException)
+            {
+            }
+            ResultCard.Near(ScreenCapture.CursorPosition(), $"{item.Title}: hata", $"{e.Message} (0x{e.HResult:X8})").ShowNear();
         }
         finally
         {

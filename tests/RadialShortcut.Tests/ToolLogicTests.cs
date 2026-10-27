@@ -113,4 +113,13 @@ public class ScrollStitchTests
         var h = ScrollStitch.RowHashes(pixels, 2, 2, 8);
         Assert.NotEqual(h[0], h[1]);
     }
+
+    [Fact]
+    public void RowHashesIgnoreSkippedRightColumns()
+    {
+        var pixels = new byte[2 * 2 * 4];
+        pixels[12] = 1; // second row, right pixel (a scrollbar)
+        var h = ScrollStitch.RowHashes(pixels, 2, 2, 8, skipRight: 1);
+        Assert.Equal(h[0], h[1]);
+    }
 }

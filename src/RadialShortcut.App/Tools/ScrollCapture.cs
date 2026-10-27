@@ -33,6 +33,8 @@ internal static class ScrollCapture
         var cursor = ScreenCapture.CursorPosition();
         // The wheel goes to whatever is under the cursor.
         Native.MoveCursor(rect.X + rect.Width / 2, rect.Y + rect.Height / 2);
+        // With "scroll inactive windows" off the wheel goes to the focused window, so focus the one below.
+        Native.Focus(Native.WindowAt(rect.X + rect.Width / 2, rect.Y + rect.Height / 2));
 
         string? stopReason = null;
         var output = new MemoryStream();
@@ -41,11 +43,12 @@ internal static class ScrollCapture
         {
             using var grabber = new FrameGrabber(rect, drawCursor: false);
             int w = grabber.Width, h = grabber.Height, stride = grabber.Stride;
+            var skip = Math.Min(w / 6, 40);
 
-            await Task.Delay(150); // let the picker overlays disappear
+            await Task.Delay(300); // let the picker overlays disappear and the focus settle
             var previous = grabber.NewBuffer();
             grabber.Grab(previous);
-            var previousHashes = ScrollStitch.RowHashes(previous, w, h, stride);
+            var previousHashes = ScrollStitch.RowHashes(previous, w, h, stride, skip);
 
             var notches = 1;
             var idle = 0;
@@ -64,7 +67,7 @@ internal static class ScrollCapture
 
                 var current = grabber.NewBuffer();
                 grabber.Grab(current);
-                var hashes = ScrollStitch.RowHashes(current, w, h, stride);
+                var hashes = ScrollStitch.RowHashes(current, w, h, stride, skip);
 
                 if (ScrollStitch.Match(previousHashes, hashes) is not { } match)
                 {
@@ -75,7 +78,7 @@ internal static class ScrollCapture
                 if (match.Shift == 0)
                 {
                     // Slow pages may need a second look before calling it the end.
-                    if (++idle >= 2)
+                    if (++idle >= 3)
                         break;
                     continue;
                 }
