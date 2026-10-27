@@ -36,7 +36,7 @@ internal sealed class PinWindow : Window
         SizeToContent = SizeToContent.WidthAndHeight;
         Left = Top = -10000;
         Cursor = Cursors.SizeAll;
-        ToolTip = "Sürükle: taşı · Tekerlek: yakınlaştır · Çift tık / Esc: kapat";
+        ToolTip = "Sürükle: taşı · Tekerlek veya + / −: büyüt-küçült · Çift tık / Esc: kapat";
 
         // One image pixel per screen pixel at zoom 1, so the pin sits exactly over what it shows.
         var image = new Image
@@ -72,8 +72,13 @@ internal sealed class PinWindow : Window
         MouseWheel += (_, e) => Zoom(e.Delta > 0 ? 1.1 : 1 / 1.1);
         KeyDown += (_, e) =>
         {
-            if (e.Key == Key.Escape)
-                Close();
+            switch (e.Key)
+            {
+                case Key.Escape: Close(); break;
+                case Key.Add or Key.OemPlus: Zoom(1.25); break;
+                case Key.Subtract or Key.OemMinus: Zoom(1 / 1.25); break;
+                case Key.D0 or Key.NumPad0: _zoom.ScaleX = _zoom.ScaleY = 1; break;
+            }
         };
     }
 
@@ -94,7 +99,9 @@ internal sealed class PinWindow : Window
         }
         Add("Kopyala", () => ToolRunner.CopyImage(_region.Image));
         Add("Dosyaya kaydet", () => ToolRunner.ShowInFolder(ToolRunner.Save(_region.Image)));
-        Add("Gerçek boyut", () => _zoom.ScaleX = _zoom.ScaleY = 1);
+        Add("Büyüt (+)", () => Zoom(1.25));
+        Add("Küçült (−)", () => Zoom(1 / 1.25));
+        Add("Gerçek boyut (0)", () => _zoom.ScaleX = _zoom.ScaleY = 1);
         menu.Items.Add(new Separator());
         Add("Kapat", Close);
         return menu;
