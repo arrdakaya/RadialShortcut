@@ -6,15 +6,13 @@ using RadialShortcut.Core;
 namespace RadialShortcut.App.Tools;
 
 /// <summary>
-/// Scrolling screenshot (PLAN.md, section 7): grab the region, scroll it with the wheel, grab again,
-/// line the frames up by their overlapping rows and stack the new rows. Stops at the end of the page,
-/// when frames cannot be lined up, or on Esc.
+/// Scrolling screenshot (PLAN.md, section 7): the user scrolls the region while frames are grabbed,
+/// lined up by their overlapping rows and the new rows stacked. Ends with the stop button or Esc.
 /// </summary>
 internal static class ScrollCapture
 {
     private const int MaxHeight = 30000;
-    private const int MaxSteps = 300;
-    private const int SettleMs = 280;   // smooth scrolling in browsers takes about this long
+    private const int PollMs = 60;
 
     public static async Task RunAsync()
     {
@@ -28,13 +26,9 @@ internal static class ScrollCapture
             return;
         }
 
-        var badge = new Badge(rect) { Text = "Kaydırılıyor… Esc ile durdur" };
+        using var stop = new CancellationTokenSource();
+        var badge = new Badge(rect) { Text = "Bölgede aşağı kaydır · bitince ■ veya Esc" }.WithStop(stop.Cancel);
         badge.Show();
-        var cursor = ScreenCapture.CursorPosition();
-        // The wheel goes to whatever is under the cursor.
-        Native.MoveCursor(rect.X + rect.Width / 2, rect.Y + rect.Height / 2);
-        // With "scroll inactive windows" off the wheel goes to the focused window, so focus the one below.
-        Native.Focus(Native.WindowAt(rect.X + rect.Width / 2, rect.Y + rect.Height / 2));
 
         string? stopReason = null;
         var output = new MemoryStream();
@@ -45,44 +39,26 @@ internal static class ScrollCapture
             int w = grabber.Width, h = grabber.Height, stride = grabber.Stride;
             var skip = Math.Min(w / 6, 40);
 
-            await Task.Delay(300); // let the picker overlays disappear and the focus settle
+            await Task.Delay(300); // let the picker overlays disappear
             var previous = grabber.NewBuffer();
             grabber.Grab(previous);
             var previousHashes = ScrollStitch.RowHashes(previous, w, h, stride, skip);
 
-            var notches = 1;
-            var idle = 0;
             var started = false;
             var footer = 0;
 
-            for (var step = 0; step < MaxSteps; step++)
+            // The user scrolls; each frame is lined up with the last one that matched and its new rows are added.
+            while (!stop.IsCancellationRequested && !Native.IsKeyDown(Native.VK_ESCAPE))
             {
-                if (Native.IsKeyDown(Native.VK_ESCAPE))
-                    break;
-
-                Native.Wheel(-notches);
-                await Task.Delay(SettleMs);
-                if (Native.IsKeyDown(Native.VK_ESCAPE))
-                    break;
+                await Task.Delay(PollMs);
 
                 var current = grabber.NewBuffer();
                 grabber.Grab(current);
                 var hashes = ScrollStitch.RowHashes(current, w, h, stride, skip);
 
-                if (ScrollStitch.Match(previousHashes, hashes) is not { } match)
-                {
-                    stopReason = "Kareler hizalanamadı; o noktaya kadar olan kısım kaydedildi.";
-                    break;
-                }
-
-                if (match.Shift == 0)
-                {
-                    // Slow pages may need a second look before calling it the end.
-                    if (++idle >= 3)
-                        break;
+                // No match: mid-animation or scrolled too far at once. Keep the last good frame and look again.
+                if (ScrollStitch.Match(previousHashes, hashes) is not { Shift: > 0 } match)
                     continue;
-                }
-                idle = 0;
 
                 if (!started)
                 {
@@ -98,11 +74,7 @@ internal static class ScrollCapture
                 outputRows += newRows;
                 footer = match.Bottom;
 
-                // Scroll about half the moving area per step: plenty of overlap, not too slow.
-                var pixelsPerNotch = Math.Max(1.0, (double)match.Shift / notches);
-                notches = Math.Clamp((int)(0.5 * (h - match.Top - match.Bottom) / pixelsPerNotch), 1, 10);
-
-                badge.Text = $"Kaydırılıyor… {outputRows} px · Esc ile durdur";
+                badge.Text = $"{outputRows} px · kaydırmaya devam et, bitince ■ veya Esc";
                 previous = current;
                 previousHashes = hashes;
 
@@ -117,7 +89,7 @@ internal static class ScrollCapture
             {
                 output.Write(previous, 0, h * stride);
                 outputRows = h;
-                stopReason ??= "Sayfa kaydırılmadı; tek kare kaydedildi.";
+                stopReason ??= "Kaydırma algılanmadı; tek kare kaydedildi.";
             }
             else if (footer > 0)
             {
@@ -137,7 +109,6 @@ internal static class ScrollCapture
         finally
         {
             badge.Close();
-            Native.MoveCursor(cursor.X, cursor.Y);
         }
     }
 }
