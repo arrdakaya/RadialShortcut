@@ -131,6 +131,7 @@ internal static class ScreenRecorder
 
                 var pixels = grabber.NewBuffer();
                 grabber.Grab(pixels);
+                FlipRows(pixels, grabber.Stride);
                 frames.Add((pixels, clock.Elapsed));
             }
         }
@@ -140,5 +141,17 @@ internal static class ScreenRecorder
         }
 
         await encoding;
+    }
+
+    /// <summary>The encoder reads uncompressed frames bottom-up, while the grabber delivers them top-down.</summary>
+    private static void FlipRows(byte[] pixels, int stride)
+    {
+        var spare = new byte[stride];
+        for (int top = 0, bottom = pixels.Length - stride; top < bottom; top += stride, bottom -= stride)
+        {
+            Buffer.BlockCopy(pixels, top, spare, 0, stride);
+            Buffer.BlockCopy(pixels, bottom, pixels, top, stride);
+            Buffer.BlockCopy(spare, 0, pixels, bottom, stride);
+        }
     }
 }

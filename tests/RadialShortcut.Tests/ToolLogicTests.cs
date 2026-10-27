@@ -148,6 +148,10 @@ public class ScrollProfileTests
         Assert.Equal(40, ScrollStitch.Match(Frame(0, 200), Frame(40, 200, changedFrom: 20, changedTo: 50))!.Value.Shift);
 
     [Fact]
+    public void PlayingVideoInStillFrameIsNoScroll() =>
+        Assert.Equal(0, ScrollStitch.Match(Frame(0, 200), Frame(0, 200, changedFrom: 60, changedTo: 120))!.Value.Shift);
+
+    [Fact]
     public void UnrelatedFramesDoNotLineUp() =>
         Assert.Null(ScrollStitch.Match(Frame(0, 200), Frame(0, 200).Select(r => r.Select(v => (byte)(v ^ 0x80)).ToArray()).ToArray()));
 

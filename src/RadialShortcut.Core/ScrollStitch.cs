@@ -81,7 +81,18 @@ public static class ScrollStitch
                 best = (shift, agree);
         }
 
-        return best.Shift == 0 ? null : new ScrollMatch(best.Shift, top, bottom);
+        // A frame that mostly stayed put (only a playing video or an animation changed) did not scroll,
+        // even if some shift happens to line up too.
+        var still = 0;
+        for (var i = 0; i < h; i++)
+            if (same(current[i], previous[i]))
+                still++;
+        if (best.Shift == 0)
+            return (double)still / h >= minAgreement ? new ScrollMatch(0, 0, 0) : null;
+        if (still >= best.Agree)
+            return new ScrollMatch(0, 0, 0);
+
+        return new ScrollMatch(best.Shift, top, bottom);
     }
 
     private static bool SameProfile(byte[] a, byte[] b)
