@@ -123,3 +123,40 @@ public class ScrollStitchTests
         Assert.Equal(h[0], h[1]);
     }
 }
+
+public class ScrollProfileTests
+{
+    // A page of distinct rows; each row's profile is derived from its page position.
+    private static byte[][] Frame(int offset, int height, int noise = 0, int changedFrom = -1, int changedTo = -1)
+    {
+        var rng = new Random(offset);
+        return Enumerable.Range(0, height).Select(y =>
+        {
+            var row = Enumerable.Range(0, 32).Select(k => (byte)Math.Clamp(new Random((y + offset) * 64 + k).Next(20, 236) + rng.Next(-noise, noise + 1), 0, 255)).ToArray();
+            if (y >= changedFrom && y < changedTo)
+                row = row.Select(v => (byte)(255 - v)).ToArray();
+            return row;
+        }).ToArray();
+    }
+
+    [Fact]
+    public void SmallRenderingDifferencesStillLineUp() =>
+        Assert.Equal(40, ScrollStitch.Match(Frame(0, 200), Frame(40, 200, noise: 4))!.Value.Shift);
+
+    [Fact]
+    public void PartlyChangedFrameStillLinesUp() =>
+        Assert.Equal(40, ScrollStitch.Match(Frame(0, 200), Frame(40, 200, changedFrom: 20, changedTo: 50))!.Value.Shift);
+
+    [Fact]
+    public void UnrelatedFramesDoNotLineUp() =>
+        Assert.Null(ScrollStitch.Match(Frame(0, 200), Frame(0, 200).Select(r => r.Select(v => (byte)(v ^ 0x80)).ToArray()).ToArray()));
+
+    [Fact]
+    public void ProfilesIgnoreSkippedColumns()
+    {
+        var pixels = new byte[2 * 2 * 4];
+        pixels[12] = pixels[13] = pixels[14] = 255; // second row, right pixel
+        var p = ScrollStitch.RowProfiles(pixels, 2, 2, 8, skipRight: 1);
+        Assert.Equal(p[0], p[1]);
+    }
+}

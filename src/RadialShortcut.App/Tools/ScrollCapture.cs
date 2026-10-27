@@ -27,6 +27,7 @@ internal static class ScrollCapture
         }
 
         using var stop = new CancellationTokenSource();
+        using var frame = RegionFrame.Show(rect);
         var badge = new Badge(rect) { Text = "Bölgede aşağı kaydır · bitince ■ veya Esc" }.WithStop(stop.Cancel);
         badge.Show();
 
@@ -42,9 +43,10 @@ internal static class ScrollCapture
             await Task.Delay(300); // let the picker overlays disappear
             var previous = grabber.NewBuffer();
             grabber.Grab(previous);
-            var previousHashes = ScrollStitch.RowHashes(previous, w, h, stride, skip);
+            var previousRows = ScrollStitch.RowProfiles(previous, w, h, stride, skip);
 
             var started = false;
+            int matched = 0, missed = 0;
             var footer = 0;
 
             // The user scrolls; each frame is lined up with the last one that matched and its new rows are added.
@@ -54,11 +56,17 @@ internal static class ScrollCapture
 
                 var current = grabber.NewBuffer();
                 grabber.Grab(current);
-                var hashes = ScrollStitch.RowHashes(current, w, h, stride, skip);
+                var rows = ScrollStitch.RowProfiles(current, w, h, stride, skip);
 
                 // No match: mid-animation or scrolled too far at once. Keep the last good frame and look again.
-                if (ScrollStitch.Match(previousHashes, hashes) is not { Shift: > 0 } match)
+                if (ScrollStitch.Match(previousRows, rows) is not { } found)
+                {
+                    missed++;
                     continue;
+                }
+                if (found is not { Shift: > 0 } match)
+                    continue;
+                matched++;
 
                 if (!started)
                 {
@@ -76,7 +84,7 @@ internal static class ScrollCapture
 
                 badge.Text = $"{outputRows} px · kaydırmaya devam et, bitince ■ veya Esc";
                 previous = current;
-                previousHashes = hashes;
+                previousRows = rows;
 
                 if (outputRows >= MaxHeight)
                 {
@@ -89,7 +97,9 @@ internal static class ScrollCapture
             {
                 output.Write(previous, 0, h * stride);
                 outputRows = h;
-                stopReason ??= "Kaydırma algılanmadı; tek kare kaydedildi.";
+                stopReason ??= missed > 0
+                    ? $"Kaydırılan kareler hizalanamadı ({missed} kare); tek kare kaydedildi. Daha yavaş kaydırmayı dene."
+                    : "Kaydırma algılanmadı; tek kare kaydedildi.";
             }
             else if (footer > 0)
             {

@@ -35,6 +35,7 @@ internal static class ScreenRecorder
         }
 
         using var stop = new CancellationTokenSource();
+        using var frame = RegionFrame.Show(rect);
         var badge = new Badge(rect).WithStop(stop.Cancel);
         badge.Show();
         for (var i = 3; i > 0 && !stop.IsCancellationRequested; i--)
@@ -95,7 +96,7 @@ internal static class ScreenRecorder
             e.Request.Sample = sample;
         };
 
-        var profile = MediaEncodingProfile.CreateMp4(VideoEncodingQuality.Auto);
+        var profile = MediaEncodingProfile.CreateMp4(VideoEncodingQuality.HD1080p); // Auto fails with MediaStreamSource (0xC00D6D60); size and rate are set below anyway
         profile.Audio = null;
         profile.Video.Width = (uint)rect.Width;
         profile.Video.Height = (uint)rect.Height;
