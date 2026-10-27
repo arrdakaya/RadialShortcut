@@ -18,7 +18,15 @@
     <UseWPF>true</UseWPF>
     <AssemblyName>RadialShortcut</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- A tray app that idles almost all day: no background GC thread, and hand memory back eagerly. -->
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <!-- Only takes effect with dotnet publish -r: precompiled code, so tools open without JIT pauses. -->
+    <PublishReadyToRun>true</PublishReadyToRun>
   </PropertyGroup>
+
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Include="System.GC.ConserveMemory" Value="5" />
+  </ItemGroup>
 
   <ItemGroup>
     <EmbeddedResource Include="config.example.json" LogicalName="RadialShortcut.App.config.example.json" />

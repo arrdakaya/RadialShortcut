@@ -40,6 +40,7 @@ public partial class App : Application
         base.OnStartup(e);
 
         AppPaths.EnsureCreated();
+        MemoryTrim.Install();
 
         _tray = (TaskbarIcon)FindResource("TrayIcon");
         _tray.ForceCreate();
