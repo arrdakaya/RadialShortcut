@@ -1303,6 +1303,10 @@ internal sealed class SettingsWindow : Window
             ResizeMode = ResizeMode.NoResize,
             Background = Palette.Surface,
         };
+        // Same slim accent scroll bar as the settings window, scrolling by pixel rather than by whole rows.
+        foreach (var key in new object[] { typeof(ScrollBar), "ScrollThumb", "ScrollThumbHot" })
+            dialog.Resources[key] = Resources[key];
+        VirtualizingPanel.SetScrollUnit(list, ScrollUnit.Pixel);
         var root = new DockPanel { Margin = new Thickness(14) };
         DockPanel.SetDock(search, Dock.Top);
         root.Children.Add(search);

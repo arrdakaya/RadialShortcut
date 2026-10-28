@@ -33,6 +33,8 @@ public partial class App : Application
     private Updater.Release? _update;
     private bool _installing;
     private DispatcherTimer? _updateTimer;
+    private DispatcherTimer? _layerTimer;
+    private ScreenPoint _ringOrigin, _ringPoint;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -121,19 +123,19 @@ public partial class App : Application
         StartUpdateChecks();
         _hook.Start();
         WatchConfig();
-        Welcome();
-        SayUpdated();
+        // One notification per start: the welcome, the update result, or just that it is running.
+        if (!Welcome() && !SayUpdated())
+            _tray?.ShowNotification("RadialShortcut başladı", "Tepside çalışıyor. Sağ tuşu basılı tutup çek: halka açılır.");
         Dispatcher.BeginInvoke(SelectedFiles.WarmUp, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
     }
 
-    /// <summary>First launch: the app lives in the tray, so say how to reach it once.</summary>
     /// <summary>The first start after an update says it went through; the file was left by the old version.</summary>
-    private void SayUpdated()
+    private bool SayUpdated()
     {
         try
         {
             if (!File.Exists(AppPaths.UpdatedFile))
-                return;
+                return false;
             var version = File.ReadAllText(AppPaths.UpdatedFile).Trim();
             File.Delete(AppPaths.UpdatedFile);
             // When the swap failed the old version starts again; then there is nothing to celebrate.
@@ -141,21 +143,25 @@ public partial class App : Application
                 _tray?.ShowNotification("Güncellendi", $"RadialShortcut {Updater.Current.ToString(3)} kuruldu.");
             else
                 _tray?.ShowNotification("Güncellenemedi", "Yeni sürüm kurulamadı, önceki sürüm açıldı. Tepsi menüsünden tekrar deneyebilirsin.");
+            return true;
         }
         catch (IOException)
         {
+            return false;
         }
     }
 
-    private void Welcome()
+    /// <summary>First launch: the app lives in the tray, so say how to reach it once.</summary>
+    private bool Welcome()
     {
         if (File.Exists(AppPaths.WelcomedFile))
-            return;
+            return false;
         _tray?.ShowNotification("RadialShortcut çalışıyor",
             "Sağ tuşu basılı tutup fareyi bir yöne çek: halka açılır, bırakınca seçilir.\n"
             + "Explorer'da dosya seçiliyken dosya halkası açılır. Dosyayı sürüklerken Shift'e basarsan araçlar çıkar.\n"
             + "Tepsi simgesine tıkla: ayarlar. Sağ tık: menü.");
         try { File.WriteAllText(AppPaths.WelcomedFile, ""); } catch (IOException) { }
+        return true;
     }
 
     /// <summary>
@@ -263,18 +269,6 @@ public partial class App : Application
             _ringTarget = target;
             _ring = RingFor(target, _ringLayer);
         }
-        else if (ev.Kind == GestureEventKind.RingMoved && _ring is not null && SwitchedLayer() is { } layer)
-        {
-            // Ctrl or Shift pressed after the ring opened still switches rings, at the same spot.
-            _ringLayer = layer;
-            var next = RingFor(_ringTarget, layer);
-            if (next != _ring)
-            {
-                _ring.Close(-1);
-                _ring = next;
-                _ring.Open(ev.Origin, IdleHint(layer));
-            }
-        }
         if (_ring is null)
             return;
 
@@ -282,17 +276,54 @@ public partial class App : Application
         {
             case GestureEventKind.RingOpened:
                 _ring.Open(ev.Origin, IdleHint(_ringLayer));
+                _ringOrigin = _ringPoint = ev.Origin;
+                WatchLayerKeys(true);
                 break;
             case GestureEventKind.RingMoved:
+                _ringPoint = ev.Point;
+                SwitchLayerIfPressed();
                 _ring.Track(ev.Point);
                 break;
             case GestureEventKind.RingReleased:
+                WatchLayerKeys(false);
                 Release(_ring, _ring.SliceAt(ev.Point), ev.Origin);
                 break;
             case GestureEventKind.RingCancelled:
+                WatchLayerKeys(false);
                 _ring.Close(-1);
                 break;
         }
+    }
+
+    /// <summary>While the ring is open, Ctrl or Shift switch rings as soon as they are pressed, without waiting for the mouse to move.</summary>
+    private void WatchLayerKeys(bool on)
+    {
+        if (!on)
+        {
+            _layerTimer?.Stop();
+            return;
+        }
+        if (_layerTimer is null)
+        {
+            _layerTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(30) };
+            _layerTimer.Tick += (_, _) => SwitchLayerIfPressed();
+        }
+        _layerTimer.Start();
+    }
+
+    /// <summary>Ctrl or Shift pressed after the ring opened still switches rings, at the same spot.</summary>
+    private void SwitchLayerIfPressed()
+    {
+        if (_ring is null || SwitchedLayer() is not { } layer)
+            return;
+        _ringLayer = layer;
+        var next = RingFor(_ringTarget, layer);
+        if (next == _ring)
+            return;
+        _ring.Close(-1);
+        _ring = next;
+        _ring.Open(_ringOrigin, IdleHint(layer));
+        _ring.Track(_ringPoint);
     }
 
     /// <summary>The layer a modifier pressed mid-gesture moves to: Ctrl from any ring to apps, Shift from main to files.</summary>
