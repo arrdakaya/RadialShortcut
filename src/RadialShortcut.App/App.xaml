@@ -15,7 +15,7 @@
                     <MenuItem x:Name="UpdateItem" Header="Güncelle" Visibility="Collapsed" Click="OnUpdateClick" />
                     <MenuItem Header="Kütüphane" Click="OnLibraryClick" />
                     <MenuItem x:Name="PauseItem" Header="Duraklat" IsCheckable="True" Click="OnPauseClick" />
-                    <MenuItem x:Name="DebugItem" Header="Debug paneli" IsCheckable="True" IsChecked="True" Click="OnDebugClick" />
+                    <MenuItem x:Name="DebugItem" Header="Debug paneli" IsCheckable="True" IsChecked="False" Click="OnDebugClick" />
                     <MenuItem x:Name="StartupItem" Header="Windows ile başlat" IsCheckable="True" Click="OnStartupClick" />
                     <MenuItem Header="Ayar klasörünü aç" Click="OnOpenConfigFolderClick" />
                     <Separator />

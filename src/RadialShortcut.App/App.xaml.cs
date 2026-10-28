@@ -66,7 +66,6 @@ public partial class App : Application
         startupItem.IsChecked = StartupRegistration.IsEnabled();
 
         _debug = new DebugOverlay(_settings);
-        _debug.Show();
 
         _hook = new MouseHookService(_settings);
         _hook.Event += ev => Dispatcher.BeginInvoke(() => OnGesture(ev));
