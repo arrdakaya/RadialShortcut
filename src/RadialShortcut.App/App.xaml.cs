@@ -29,6 +29,7 @@ public partial class App : Application
     private const string DefaultUpdateRepo = "arrdakaya/RadialShortcut";
     private string? _updateRepo;
     private Updater.Release? _update;
+    private bool _installing;
     private DispatcherTimer? _updateTimer;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -329,15 +330,35 @@ public partial class App : Application
             return;
         var item = (MenuItem)sender;
         item.IsEnabled = false;
+        if (await InstallUpdateAsync(text => item.Header = text) is { } error)
+        {
+            _tray?.ShowNotification("Güncellenemedi", error);
+            item.Header = $"Güncelle (v{_update.Version})";
+            item.IsEnabled = true;
+        }
+    }
+
+    /// <summary>Installs the waiting release, from the tray or the settings window; null when it went through.</summary>
+    private async Task<string?> InstallUpdateAsync(Action<string> status)
+    {
+        // The tray and the settings window share one download folder, so only one install runs.
+        if (_installing)
+            return "Güncelleme zaten kuruluyor.";
+        _installing = true;
         try
         {
-            await Updater.InstallAsync(_update, text => item.Header = text);
+            if (_update is null && !await CheckForUpdateAsync())
+                return "Kurulacak yeni sürüm bulunamadı.";
+            await Updater.InstallAsync(_update!, status);
+            return null;
         }
         catch (Exception ex) when (ex is IOException or System.Net.Http.HttpRequestException or InvalidDataException or TaskCanceledException or UnauthorizedAccessException)
         {
-            _tray?.ShowNotification("Güncellenemedi", ex.Message);
-            item.Header = $"Güncelle (v{_update.Version})";
-            item.IsEnabled = true;
+            return ex.Message;
+        }
+        finally
+        {
+            _installing = false;
         }
     }
 
@@ -378,9 +399,9 @@ public partial class App : Application
             _debug?.Hide();
     }
 
-    private void OnTrayLeftClick(object sender, RoutedEventArgs e) => SettingsWindow.ShowOrActivate(_hotkey, CheckForUpdateAsync);
+    private void OnTrayLeftClick(object sender, RoutedEventArgs e) => SettingsWindow.ShowOrActivate(_hotkey, CheckForUpdateAsync, InstallUpdateAsync);
 
-    private void OnSettingsClick(object sender, RoutedEventArgs e) => SettingsWindow.ShowOrActivate(_hotkey, CheckForUpdateAsync);
+    private void OnSettingsClick(object sender, RoutedEventArgs e) => SettingsWindow.ShowOrActivate(_hotkey, CheckForUpdateAsync, InstallUpdateAsync);
 
     private void OnExitClick(object sender, RoutedEventArgs e) => Shutdown();
 }

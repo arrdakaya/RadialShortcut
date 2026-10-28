@@ -190,9 +190,12 @@ public sealed class RingCatalog
         return new RingItem("action", label, slice.Title ?? label, hint, slice.Icon ?? ActionIcons[action.Type], action);
     }
 
+    /// <summary>The default launch icon; the ring swaps it for the launched app's own icon.</summary>
+    public const string LaunchIcon = "M5 5h14v14H5z M10 9h5v5 M15 9l-6 6";
+
     private static readonly Dictionary<string, string> ActionIcons = new()
     {
-        ["launch"] = "M5 5h14v14H5z M10 9h5v5 M15 9l-6 6",
+        ["launch"] = LaunchIcon,
         ["url"] = "M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18 M3 12h18 M12 3c-3 3-3 15 0 18 M12 3c3 3 3 15 0 18",
         ["hotkey"] = "M3 7h18v10H3z M6 10h1 M9 10h1 M12 10h1 M15 10h1 M18 10h1 M8 14h8",
         ["text"] = "M5 6h14 M5 10h14 M5 14h9 M5 18h6",

@@ -76,6 +76,7 @@ internal sealed class SettingsWindow : Window
     private readonly UserSettings _settings;
     private readonly HotkeyRing? _hotkey;
     private readonly Func<Task<bool>> _checkUpdate;
+    private readonly Func<Action<string>, Task<string?>> _installUpdate;
     private bool _dirty;
     private bool _loading; // set while editors are filled from the model, so their events do not write back
 
@@ -129,14 +130,15 @@ internal sealed class SettingsWindow : Window
     private readonly Input _sliceValue = new("");
     private readonly ChordBox _sliceChord = new(minKeys: 1);
     private readonly Pill _browse;
+    private readonly Pill _install;
     private readonly StackPanel _valuePanel = new();
     private readonly TextBlock _sliceProblem = new() { Foreground = Danger, FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) };
 
-    public static void ShowOrActivate(HotkeyRing? hotkey, Func<Task<bool>> checkUpdate)
+    public static void ShowOrActivate(HotkeyRing? hotkey, Func<Task<bool>> checkUpdate, Func<Action<string>, Task<string?>> installUpdate)
     {
         if (_open is null)
         {
-            var window = new SettingsWindow(hotkey, checkUpdate);
+            var window = new SettingsWindow(hotkey, checkUpdate, installUpdate);
             window.Closed += (_, _) => { if (_open == window) _open = null; };
             _open = window;
             _open.Show();
@@ -146,10 +148,14 @@ internal sealed class SettingsWindow : Window
         _open.Activate();
     }
 
-    private SettingsWindow(HotkeyRing? hotkey, Func<Task<bool>> checkUpdate)
+    private SettingsWindow(HotkeyRing? hotkey, Func<Task<bool>> checkUpdate, Func<Action<string>, Task<string?>> installUpdate)
     {
         _hotkey = hotkey;
         _checkUpdate = checkUpdate;
+        _installUpdate = installUpdate;
+        _install = TextButton("Güncelle", InstallUpdate, Kind.Primary);
+        _install.Visibility = Visibility.Collapsed;
+        _install.Margin = new Thickness(0, 0, 8, 0);
         var loaded = UserSettings.TryLoad(AppPaths.ConfigFile, out var settings, out var error);
         _settings = settings.Clone();
         AddBuiltInRings();
@@ -209,7 +215,7 @@ internal sealed class SettingsWindow : Window
     /// <summary><c>--settings-shot &lt;folder&gt;</c>: both pages to PNG, to check the layout without clicking through.</summary>
     public static async Task ShotAsync(string folder)
     {
-        var window = new SettingsWindow(null, () => Task.FromResult(false));
+        var window = new SettingsWindow(null, () => Task.FromResult(false), _ => Task.FromResult<string?>(null));
         window.Show();
         foreach (var (page, name) in new[] { (0, "settings-general"), (1, "settings-rings") })
         {
@@ -310,7 +316,7 @@ internal sealed class SettingsWindow : Window
             return;
 
         _dirty = false;
-        var fresh = new SettingsWindow(_hotkey, _checkUpdate)
+        var fresh = new SettingsWindow(_hotkey, _checkUpdate, _installUpdate)
         {
             WindowStartupLocation = WindowStartupLocation.Manual,
             Left = Left,
@@ -423,9 +429,14 @@ internal sealed class SettingsWindow : Window
         page.Children.Add(Section("Hariç uygulamalar", excluded));
 
         var check = TextButton("Güncellemeleri denetle", CheckUpdate, Kind.Secondary);
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal };
+        buttons.Children.Add(_install);
+        buttons.Children.Add(check);
         page.Children.Add(Section("Güncellemeler",
-            Row($"Sürüm {Updater.Current.ToString(3)}", "", check, _updateStatus)));
+            Row($"Sürüm {Updater.Current.ToString(3)}", "", buttons, _updateStatus)));
         _updateStatus.Text = "Günde bir kez kendiliğinden denetlenir.";
+        // A release the tray already found shows its button straight away.
+        CheckUpdate();
 
         return Scroll(page);
     }
@@ -488,9 +499,29 @@ internal sealed class SettingsWindow : Window
     private async void CheckUpdate()
     {
         _updateStatus.Text = "Denetleniyor…";
-        _updateStatus.Text = await _checkUpdate()
-            ? "Yeni sürüm var. Tepsi menüsündeki \"Güncelle\" ile kurabilirsin."
+        var found = await _checkUpdate();
+        _install.Visibility = found ? Visibility.Visible : Visibility.Collapsed;
+        _updateStatus.Text = found
+            ? "Yeni sürüm var. \"Güncelle\" ile kurabilirsin."
             : "En son sürümü kullanıyorsun (ya da GitHub'a ulaşılamadı).";
+    }
+
+    /// <summary>Downloads and installs the waiting release; the app restarts itself when it is done.</summary>
+    private async void InstallUpdate()
+    {
+        // The app restarts at the end, and a shutdown cannot wait on the "save changes?" question.
+        if (_dirty)
+        {
+            _updateStatus.Text = "Önce değişiklikleri kaydet ya da geri al.";
+            return;
+        }
+        _install.IsEnabled = false;
+        var error = await _installUpdate(text => _updateStatus.Text = text);
+        if (error is not null)
+        {
+            _updateStatus.Text = $"Güncellenemedi: {error}";
+            _install.IsEnabled = true;
+        }
     }
 
     /// <summary>A menu of the apps that have a window open right now.</summary>
@@ -1138,7 +1169,9 @@ internal sealed class SettingsWindow : Window
     {
         var item = RingCatalog.ItemFor(slice, out var problem);
         var icon = slice.Icon ?? item?.Icon ?? Tools.FirstOrDefault(t => t.Id == slice.Tool)?.Icon;
-        _iconPreview.Child = icon is null ? null : Sized(IconShape(icon, Palette.Text), 20, new Thickness(0));
+        _iconPreview.Child = slice.Icon is null && slice.Action is { Type: "launch" } && AppIcons.For(slice.Action.Path) is { } app
+            ? new Image { Source = app, Width = 24, Height = 24 }
+            : icon is null ? null : Sized(IconShape(icon, Palette.Text), 20, new Thickness(0));
         _sliceProblem.Text = problem is null ? "" : $"Bu dilim kaydedilemez: {problem}.";
         _sliceProblem.Visibility = problem is null ? Visibility.Collapsed : Visibility.Visible;
     }

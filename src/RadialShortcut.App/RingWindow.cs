@@ -384,7 +384,7 @@ public sealed class RingWindow : Window
                 StrokeThickness = 1,
             };
 
-            var icon = new Path
+            var icon = AppIcon(_items[i]) ?? (FrameworkElement)new Path
             {
                 Data = Geometry.Parse(_items[i].Icon),
                 Stroke = new SolidColorBrush(TextColor),
@@ -423,6 +423,19 @@ public sealed class RingWindow : Window
             canvas.Children.Add(content);
             _slices.Add(new Slice(path, content, icon, label, shapeScale, scale, glow));
         }
+    }
+
+    /// <summary>
+    /// A slice that opens an app with the default launch icon shows that app's own icon instead;
+    /// picking another icon in settings keeps the line icon.
+    /// </summary>
+    private static FrameworkElement? AppIcon(RingItem item)
+    {
+        if (item.Action is not { Type: "launch" } action || item.Icon != RingCatalog.LaunchIcon || AppIcons.For(action.Path) is not { } source)
+            return null;
+        var image = new Image { Source = source, Width = 24, Height = 24, HorizontalAlignment = HorizontalAlignment.Center };
+        RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.HighQuality);
+        return image;
     }
 
     /// <summary>Accent glow over the hovered slice plus a bright arc just outside it; rotated to follow the hover.</summary>
@@ -606,7 +619,7 @@ public sealed class RingWindow : Window
         return freezable;
     }
 
-    private sealed record Slice(Path Shape, FrameworkElement Content, Path Icon, TextBlock Label, ScaleTransform ShapeScale, ScaleTransform ContentScale, DropShadowEffect Glow)
+    private sealed record Slice(Path Shape, FrameworkElement Content, FrameworkElement Icon, TextBlock Label, ScaleTransform ShapeScale, ScaleTransform ContentScale, DropShadowEffect Glow)
     {
         private int _glowToken;
 
@@ -615,7 +628,8 @@ public sealed class RingWindow : Window
             // Entering a slice reacts quickly; leaving fades a bit slower so sweeping across the ring
             // leaves a short trail instead of hard flicker.
             var colors = TimeSpan.FromMilliseconds(active ? 90 : 180);
-            Fade(Icon.Stroke, active ? Colors.White : TextColor, colors);
+            if (Icon is Path line)
+                Fade(line.Stroke, active ? Colors.White : TextColor, colors);
             Fade(Label.Foreground, active ? Colors.White : LabelColor, colors);
             // The glow is attached only while it shows: an invisible effect still costs a blur pass every frame.
             var token = ++_glowToken;
