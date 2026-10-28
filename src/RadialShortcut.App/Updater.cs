@@ -58,9 +58,14 @@ internal static class Updater
     /// </summary>
     public static async Task InstallAsync(Release release, Action<string> status)
     {
-        var work = Path.Combine(Path.GetTempPath(), "RadialShortcut-update");
-        if (Directory.Exists(work))
-            Directory.Delete(work, recursive: true);
+        // A fresh folder each time: an app started by an older update may still have its old folder
+        // as working directory, so that one cannot be deleted. Leftovers are cleared when they can be.
+        foreach (var old in Directory.EnumerateDirectories(Path.GetTempPath(), "RadialShortcut-update*"))
+        {
+            try { Directory.Delete(old, recursive: true); }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+        }
+        var work = Path.Combine(Path.GetTempPath(), $"RadialShortcut-update-{Guid.NewGuid():N}");
         Directory.CreateDirectory(work);
 
         status("Güncelleme indiriliyor");
@@ -98,10 +103,10 @@ internal static class Updater
             if exist "{backup}" rmdir /s /q "{backup}"
             move "{app}" "{backup}" || goto fail
             move "{fresh}" "{app}" || (move "{backup}" "{app}" & goto fail)
-            start "" "{app}\RadialShortcut.exe"
+            start "" /d "{app}" "{app}\RadialShortcut.exe"
             exit /b 0
             :fail
-            start "" "{app}\RadialShortcut.exe"
+            start "" /d "{app}" "{app}\RadialShortcut.exe"
             """);
         Process.Start(new ProcessStartInfo("cmd.exe", $"/c \"{script}\"") { CreateNoWindow = true, UseShellExecute = false, WorkingDirectory = work });
         System.Windows.Application.Current.Shutdown();
