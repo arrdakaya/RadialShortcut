@@ -1277,6 +1277,7 @@ internal sealed class SettingsWindow : Window
             Say("Uygulama listesi okunamadı. Gözat ile dosyayı seçebilirsin.", problem: true);
             return;
         }
+        AppIcons.Preload(_installedApps.Select(a => a.Path));
 
         var search = new Input("Ara…");
         var list = new ListBox
@@ -1288,6 +1289,7 @@ internal sealed class SettingsWindow : Window
         };
         ScrollViewer.SetHorizontalScrollBarVisibility(list, ScrollBarVisibility.Disabled);
         VirtualizingPanel.SetIsVirtualizing(list, true);
+        VirtualizingPanel.SetVirtualizationMode(list, VirtualizationMode.Recycling);
         list.ItemTemplate = AppRowTemplate();
 
         var dialog = new Window
@@ -1329,6 +1331,19 @@ internal sealed class SettingsWindow : Window
             chosen = app;
             dialog.Close();
         }
+        var cancel = TextButton("Vazgeç", dialog.Close, Kind.Ghost);
+        var pick = TextButton("Seç", Choose, Kind.Primary);
+        pick.Margin = new Thickness(8, 0, 0, 0);
+        var buttons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(0, 12, 0, 0),
+            Children = { cancel, pick },
+        };
+        DockPanel.SetDock(buttons, Dock.Bottom);
+        root.Children.Insert(1, buttons); // before the list, which fills what is left
+        list.SelectionChanged += (_, _) => pick.IsEnabled = list.SelectedItem is not null;
         search.Box.TextChanged += (_, _) => Filter();
         search.Box.PreviewKeyDown += (_, e) =>
         {
@@ -1423,9 +1438,10 @@ internal sealed class SettingsWindow : Window
         if (Ring is not { } ring || Slice is not { } slice)
             return;
         ring.Slices.Remove(slice);
+        _slice = Math.Min(_slice, ring.Slices.Count - 1); // before the preview highlights it
         RefreshRingCards();
         RebuildPreview(animate: false);
-        SelectSlice(Math.Min(_slice, ring.Slices.Count - 1));
+        SelectSlice(_slice);
         MarkDirty();
     }
 

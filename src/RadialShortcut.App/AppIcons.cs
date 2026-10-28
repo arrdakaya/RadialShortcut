@@ -20,13 +20,18 @@ internal static class AppIcons
         if (string.IsNullOrWhiteSpace(path))
             return null;
         path = Environment.ExpandEnvironmentVariables(path.Trim().Trim('"'));
-        if (Cache.TryGetValue(path, out var cached))
-            return cached;
+        lock (Cache)
+        {
+            if (Cache.TryGetValue(path, out var cached))
+                return cached;
+        }
 
         ImageSource? image = null;
         if (path.StartsWith("shell:", StringComparison.OrdinalIgnoreCase))
         {
-            Cache[path] = image = ShellItemIcon(path);
+            image = ShellItemIcon(path);
+            lock (Cache)
+                Cache[path] = image;
             return image;
         }
         var full = Resolve(path);
@@ -47,8 +52,35 @@ internal static class AppIcons
                 }
             }
         }
-        Cache[path] = image;
+        lock (Cache)
+            Cache[path] = image;
         return image;
+    }
+
+    /// <summary>Loads icons on a background thread so a long list scrolls without stopping to fetch them.</summary>
+    public static void Preload(IEnumerable<string> paths)
+    {
+        var list = paths.ToList();
+        var thread = new Thread(() =>
+        {
+            foreach (var path in list)
+            {
+                try
+                {
+                    For(path);
+                }
+                catch (Exception)
+                {
+                    // A missing icon just stays blank; the row loads it again if it can.
+                }
+            }
+        })
+        {
+            IsBackground = true,
+            Priority = ThreadPriority.BelowNormal,
+        };
+        thread.SetApartmentState(ApartmentState.STA); // the shell's icon objects expect one
+        thread.Start();
     }
 
     /// <summary>A full path as is; a bare name like notepad.exe is looked up on PATH.</summary>

@@ -173,7 +173,7 @@ public sealed class RingWindow : Window
     }
 
     /// <summary>Highlights a slice as if the cursor were on it; -1 clears.</summary>
-    public void Highlight(int slice) => SetHover(slice);
+    public void Highlight(int slice) => SetHover(slice < _slices.Count ? slice : -1);
 
     /// <summary>
     /// The drop shadow as its own blurred silhouette, rasterized once and cached. A shadow effect on the
