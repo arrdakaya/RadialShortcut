@@ -65,7 +65,15 @@ public partial class App : Application
         var startupItem = (MenuItem)_tray.ContextMenu!.Items.OfType<MenuItem>().Single(i => i.Name == "StartupItem");
         startupItem.IsChecked = StartupRegistration.IsEnabled();
 
+        // The debug panel is for development builds only; released builds drop it and its menu item.
+        var debugItem = _tray.ContextMenu.Items.OfType<MenuItem>().Single(i => i.Name == "DebugItem");
+#if DEBUG
         _debug = new DebugOverlay(_settings);
+        _debug.Show();
+        debugItem.IsChecked = true;
+#else
+        debugItem.Visibility = Visibility.Collapsed;
+#endif
 
         _hook = new MouseHookService(_settings);
         _hook.Event += ev => Dispatcher.BeginInvoke(() => OnGesture(ev));
