@@ -25,7 +25,14 @@
     <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
     <!-- Only takes effect with dotnet publish -r: precompiled code, so tools open without JIT pauses. -->
     <PublishReadyToRun>true</PublishReadyToRun>
+    <!-- Drops the framework's translated error messages for a dozen languages. -->
+    <SatelliteResourceLanguages>tr</SatelliteResourceLanguages>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The WinRT projection is huge and only used by a few tools; precompiling it doubles it. -->
+    <PublishReadyToRunExclude Include="Microsoft.Windows.SDK.NET.dll" />
+  </ItemGroup>
 
   <ItemGroup>
     <RuntimeHostConfigurationOption Include="System.GC.ConserveMemory" Value="5" />
