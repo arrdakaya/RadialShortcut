@@ -365,10 +365,13 @@ internal sealed class SettingsWindow : Window
         Say("Kaydedilmemiş değişiklikler var.");
     }
 
-    private void Say(string text, bool problem = false)
+    private void Say(string text, bool problem = false, bool done = false)
     {
         _status.Text = text;
-        _status.Foreground = problem ? Danger : Palette.Muted;
+        _status.Foreground = problem ? Danger : done ? Palette.Accent : Palette.Muted;
+        _status.FontWeight = done ? FontWeights.SemiBold : FontWeights.Normal;
+        // Fades in, so a repeat of the same message still shows that something happened.
+        _status.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(250)));
     }
 
     // ---- Genel ----
@@ -1501,9 +1504,10 @@ internal sealed class SettingsWindow : Window
             Say($"Kaydedilemedi: {e.Message}", problem: true);
             return false;
         }
-        // The watcher reloads config.json and shows "Ayarlar yüklendi".
+        // The watcher reloads config.json and shows "Ayarlar yüklendi"; Windows may hold that notice back
+        // (Focus Assist, Do Not Disturb), so the window confirms it too.
         _dirty = false;
-        Say("Kaydedildi.");
+        Say($"✓ Kaydedildi, {DateTime.Now:HH:mm:ss}. Halkalar güncellendi.", done: true);
         return true;
     }
 

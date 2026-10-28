@@ -35,6 +35,7 @@ public partial class App : Application
     private DispatcherTimer? _updateTimer;
     private DispatcherTimer? _layerTimer;
     private ScreenPoint _ringOrigin, _ringPoint;
+    private string _baseLayer = RingLayers.Main;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -264,6 +265,7 @@ public partial class App : Application
             // Ctrl opens the app ring; Shift picks the other of main and files: over files selected in
             // Explorer the file ring is the default. Checked here, on the UI thread, so the hook callback stays fast.
             var files = SelectedFiles.IsExplorer(target) && SelectedFiles.HasSelection(target);
+            _baseLayer = files ? RingLayers.Files : RingLayers.Main;
             _ringLayer = Native.IsControlDown() ? RingLayers.Apps
                 : files != Native.IsShiftDown() ? RingLayers.Files : RingLayers.Main;
             _ringTarget = target;
@@ -311,10 +313,11 @@ public partial class App : Application
         _layerTimer.Start();
     }
 
-    /// <summary>Ctrl or Shift pressed after the ring opened still switches rings, at the same spot.</summary>
+    /// <summary>Ctrl or Shift switch rings at the same spot while held; letting go returns to the default ring.</summary>
     private void SwitchLayerIfPressed()
     {
-        if (_ring is null || SwitchedLayer() is not { } layer)
+        var layer = HeldLayer();
+        if (_ring is null || layer == _ringLayer)
             return;
         _ringLayer = layer;
         var next = RingFor(_ringTarget, layer);
@@ -326,14 +329,14 @@ public partial class App : Application
         _ring.Track(_ringPoint);
     }
 
-    /// <summary>The layer a modifier pressed mid-gesture moves to: Ctrl from any ring to apps, Shift from main to files.</summary>
-    private string? SwitchedLayer()
+    /// <summary>The ring the held modifiers ask for: Ctrl the app ring, Shift the other of main and files, none the default.</summary>
+    private string HeldLayer()
     {
-        if (_ringLayer != RingLayers.Apps && Native.IsControlDown())
+        if (Native.IsControlDown())
             return RingLayers.Apps;
-        if (_ringLayer == RingLayers.Main && Native.IsShiftDown())
-            return RingLayers.Files;
-        return null;
+        if (Native.IsShiftDown())
+            return _baseLayer == RingLayers.Main ? RingLayers.Files : RingLayers.Main;
+        return _baseLayer;
     }
 
     /// <summary>Under the title while nothing is hovered: the rings still reachable from this one.</summary>

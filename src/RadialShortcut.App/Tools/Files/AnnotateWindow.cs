@@ -14,18 +14,29 @@ using ShapePath = System.Windows.Shapes.Path;
 namespace RadialShortcut.App.Tools;
 
 /// <summary>
-/// Not ekle: arrows, boxes, a pen, pixelated blur, text and a crop (free or a fixed ratio) on an image.
-/// Ctrl+Z undoes, Ctrl+C copies, Ctrl+S or Enter saves and copies, Esc closes.
+/// Not ekle: arrows, lines, boxes, ellipses, a pen, a highlighter, numbered steps, pixelated blur, text and
+/// a crop (free or a fixed ratio) on an image, in a choice of colors and sizes. Shift keeps lines at 45 degrees
+/// and shapes square. 1-0 pick a tool, [ and ] change the size, Ctrl+Z / Ctrl+Y undo and redo, Ctrl+C copies,
+/// Ctrl+S or Enter saves and copies, Esc closes.
 /// </summary>
 internal sealed class AnnotateWindow : Window
 {
-    private enum Tool { Arrow, Box, Pen, Blur, Text, Crop }
+    private enum Tool { Arrow, Line, Box, Ellipse, Pen, Marker, Number, Blur, Text, Crop }
+
+    private static readonly (Tool Tool, string Label)[] ToolNames =
+    [
+        (Tool.Arrow, "Ok"), (Tool.Line, "Çizgi"), (Tool.Box, "Kutu"), (Tool.Ellipse, "Elips"), (Tool.Pen, "Kalem"),
+        (Tool.Marker, "Fosforlu"), (Tool.Number, "Numara"), (Tool.Blur, "Bulanık"), (Tool.Text, "Metin"), (Tool.Crop, "Kırp"),
+    ];
+
+    private static readonly (string Label, double Scale)[] Sizes = [("İnce", 0.5), ("Orta", 1), ("Kalın", 2), ("Çok kalın", 3.5)];
 
     private static readonly (string Label, Color Color)[] Colors =
     [
         ("Kırmızı", Color.FromRgb(0xE5, 0x39, 0x35)), ("Sarı", Color.FromRgb(0xFD, 0xD8, 0x35)),
         ("Mavi", Color.FromRgb(0x1E, 0x88, 0xE5)), ("Yeşil", Color.FromRgb(0x43, 0xA0, 0x47)),
-        ("Beyaz", Colors_.White), ("Siyah", Colors_.Black),
+        ("Turuncu", Color.FromRgb(0xFB, 0x8C, 0x00)), ("Mor", Color.FromRgb(0x8E, 0x24, 0xAA)),
+        ("Pembe", Color.FromRgb(0xEC, 0x40, 0x7A)), ("Beyaz", Colors_.White), ("Siyah", Colors_.Black),
     ];
 
     private static readonly (string Label, double Ratio)[] Ratios = [("Serbest", 0), ("1:1", 1), ("4:3", 4.0 / 3), ("16:9", 16.0 / 9), ("9:16", 9.0 / 16)];
@@ -36,9 +47,14 @@ internal sealed class AnnotateWindow : Window
     private readonly Canvas _layer = new();
     private readonly ShapePath _cropShade = new() { Fill = new SolidColorBrush(Color.FromArgb(0x90, 0, 0, 0)), IsHitTestVisible = false };
     private readonly List<UIElement> _items = [];
+    private readonly Stack<UIElement> _redo = new();
+    private readonly List<ToggleButton> _toolButtons = [];
+    private readonly List<Button> _swatches = [];
+    private readonly ComboBox _sizeBox = new() { Width = 96, Focusable = false, ToolTip = "Kalınlık ( [ ve ] )" };
     private readonly double _stroke;
     private Tool _tool = Tool.Arrow;
     private Color _color = Colors[0].Color;
+    private double _size = 1;
     private double _ratio;
     private Rect? _crop;
     private Point _start;
@@ -101,28 +117,32 @@ internal sealed class AnnotateWindow : Window
     private UIElement Toolbar()
     {
         var bar = new WrapPanel { Margin = new Thickness(10, 8, 10, 0) };
-        var tools = new List<ToggleButton>();
-        foreach (var (tool, label) in new[] { (Tool.Arrow, "Ok"), (Tool.Box, "Kutu"), (Tool.Pen, "Kalem"), (Tool.Blur, "Bulanık"), (Tool.Text, "Metin"), (Tool.Crop, "Kırp") })
+        for (var i = 0; i < ToolNames.Length; i++)
         {
-            var button = new ToggleButton { Content = label, IsChecked = tool == _tool, Focusable = false };
+            var (tool, label) = ToolNames[i];
+            var button = new ToggleButton { Content = label, IsChecked = tool == _tool, Focusable = false, ToolTip = $"{label} ({(i + 1) % 10})" };
             StyleButton(button);
-            button.Click += (_, _) =>
-            {
-                _tool = tool;
-                foreach (var other in tools)
-                    other.IsChecked = other == button;
-            };
-            tools.Add(button);
+            button.Click += (_, _) => PickTool(tool);
+            _toolButtons.Add(button);
             bar.Children.Add(button);
         }
 
         bar.Children.Add(new Border { Width = 12 });
         foreach (var (label, color) in Colors)
         {
-            var swatch = new Button { Width = 22, Height = 22, Background = new SolidColorBrush(color), ToolTip = label, Focusable = false, Margin = new Thickness(2, 0, 2, 0), BorderBrush = Palette.Line };
-            swatch.Click += (_, _) => _color = color;
+            var swatch = new Button { Width = 22, Height = 22, Background = new SolidColorBrush(color), ToolTip = label, Focusable = false, Margin = new Thickness(2, 0, 2, 6), BorderBrush = Palette.Line };
+            swatch.Click += (_, _) => PickColor(color);
+            _swatches.Add(swatch);
             bar.Children.Add(swatch);
         }
+        PickColor(_color);
+
+        bar.Children.Add(new Border { Width = 12 });
+        _sizeBox.ItemsSource = Sizes.Select(s => s.Label).ToList();
+        _sizeBox.SelectedIndex = 1;
+        _sizeBox.Margin = new Thickness(0, 0, 4, 6);
+        _sizeBox.SelectionChanged += (_, _) => _size = Sizes[Math.Max(0, _sizeBox.SelectedIndex)].Scale;
+        bar.Children.Add(_sizeBox);
 
         bar.Children.Add(new Border { Width = 12 });
         var ratio = new ComboBox { Width = 90, Focusable = false, ItemsSource = Ratios.Select(r => r.Label).ToList(), SelectedIndex = 0, ToolTip = "Kırpma oranı" };
@@ -131,10 +151,32 @@ internal sealed class AnnotateWindow : Window
 
         bar.Children.Add(new Border { Width = 12 });
         bar.Children.Add(Action("Geri al", Undo));
+        bar.Children.Add(Action("Yinele", Redo));
         bar.Children.Add(Action("Kopyala", () => Copy(Render())));
         bar.Children.Add(Action("Kaydet", Save, primary: true));
         return bar;
     }
+
+    private void PickTool(Tool tool)
+    {
+        _tool = tool;
+        for (var i = 0; i < _toolButtons.Count; i++)
+            _toolButtons[i].IsChecked = ToolNames[i].Tool == tool;
+    }
+
+    /// <summary>The chosen swatch gets a thick ring so it is clear which color is on.</summary>
+    private void PickColor(Color color)
+    {
+        _color = color;
+        for (var i = 0; i < _swatches.Count; i++)
+        {
+            var on = Colors[i].Color == color;
+            _swatches[i].BorderThickness = new Thickness(on ? 3 : 1);
+            _swatches[i].BorderBrush = on ? Palette.Accent : Palette.Line;
+        }
+    }
+
+    private double Stroke => _stroke * _size;
 
     private static void StyleButton(ButtonBase button)
     {
@@ -169,6 +211,14 @@ internal sealed class AnnotateWindow : Window
             Close();
         else if (ctrl && e.Key == Key.Z)
             Undo();
+        else if (ctrl && e.Key == Key.Y)
+            Redo();
+        else if (!ctrl && e.Key is >= Key.D0 and <= Key.D9)
+            PickTool(ToolNames[(e.Key - Key.D0 + 9) % 10].Tool);
+        else if (e.Key == Key.OemOpenBrackets)
+            _sizeBox.SelectedIndex = Math.Max(0, _sizeBox.SelectedIndex - 1);
+        else if (e.Key == Key.OemCloseBrackets)
+            _sizeBox.SelectedIndex = Math.Min(Sizes.Length - 1, _sizeBox.SelectedIndex + 1);
         else if (ctrl && e.Key == Key.C)
             Copy(Render());
         else if (ctrl && e.Key == Key.S || e.Key == Key.Enter)
@@ -191,7 +241,7 @@ internal sealed class AnnotateWindow : Window
                     Foreground = brush,
                     Background = Brushes.Transparent,
                     BorderThickness = new Thickness(0),
-                    FontSize = Math.Max(16, _stroke * 9),
+                    FontSize = Math.Max(16, _stroke * 9) * Math.Sqrt(_size),
                     FontWeight = FontWeights.SemiBold,
                     CaretBrush = brush,
                     MinWidth = 40,
@@ -202,17 +252,30 @@ internal sealed class AnnotateWindow : Window
                 Add(box);
                 Dispatcher.BeginInvoke(() => box.Focus());
                 return;
+            case Tool.Number:
+                Add(Step(_start, brush));
+                return;
             case Tool.Pen:
-                _drawing = new Polyline { Stroke = brush, StrokeThickness = _stroke, StrokeLineJoin = PenLineJoin.Round, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, Points = [_start] };
+                _drawing = new Polyline { Stroke = brush, StrokeThickness = Stroke, StrokeLineJoin = PenLineJoin.Round, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, Points = [_start] };
+                break;
+            case Tool.Marker:
+                // See-through and wide, like a highlighter pen over text.
+                _drawing = new Polyline { Stroke = brush, StrokeThickness = Stroke * 5, Opacity = 0.4, StrokeLineJoin = PenLineJoin.Round, StrokeStartLineCap = PenLineCap.Flat, StrokeEndLineCap = PenLineCap.Flat, Points = [_start] };
                 break;
             case Tool.Arrow:
-                _drawing = new ShapePath { Stroke = brush, Fill = brush, StrokeThickness = _stroke, StrokeLineJoin = PenLineJoin.Round };
+                _drawing = new ShapePath { Stroke = brush, Fill = brush, StrokeThickness = Stroke, StrokeLineJoin = PenLineJoin.Round, Tag = Tool.Arrow };
+                break;
+            case Tool.Line:
+                _drawing = new ShapePath { Stroke = brush, StrokeThickness = Stroke, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, Tag = Tool.Line };
+                break;
+            case Tool.Ellipse:
+                _drawing = new Ellipse { Stroke = brush, StrokeThickness = Stroke };
                 break;
             case Tool.Crop:
                 _crop = null;
                 break;
             default:
-                _drawing = new Rectangle { Stroke = _tool == Tool.Box ? brush : Brushes.White, StrokeThickness = _tool == Tool.Box ? _stroke : 1, StrokeDashArray = _tool == Tool.Blur ? [4, 3] : null };
+                _drawing = new Rectangle { Stroke = _tool == Tool.Box ? brush : Brushes.White, StrokeThickness = _tool == Tool.Box ? Stroke : 1, StrokeDashArray = _tool == Tool.Blur ? [4, 3] : null };
                 break;
         }
         if (_drawing is not null)
@@ -230,15 +293,18 @@ internal sealed class AnnotateWindow : Window
             case Polyline line:
                 line.Points.Add(p);
                 break;
-            case ShapePath arrow:
-                arrow.Data = ArrowGeometry(_start, p, _stroke);
+            case ShapePath { Tag: Tool.Arrow } arrow:
+                arrow.Data = ArrowGeometry(_start, Snap(p), arrow.StrokeThickness);
                 break;
-            case Rectangle rect:
-                var r = new Rect(_start, p);
-                Canvas.SetLeft(rect, r.X);
-                Canvas.SetTop(rect, r.Y);
-                rect.Width = r.Width;
-                rect.Height = r.Height;
+            case ShapePath straight:
+                straight.Data = new LineGeometry(_start, Snap(p));
+                break;
+            case Shape shape:
+                var r = new Rect(_start, _tool == Tool.Blur ? p : Square(p));
+                Canvas.SetLeft(shape, r.X);
+                Canvas.SetTop(shape, r.Y);
+                shape.Width = r.Width;
+                shape.Height = r.Height;
                 break;
             case null when _tool == Tool.Crop:
                 _crop = CropRect(_start, p);
@@ -260,7 +326,7 @@ internal sealed class AnnotateWindow : Window
         _layer.Children.Remove(drawn);
         if (_tool == Tool.Blur && drawn is Rectangle area && area.Width >= 4 && area.Height >= 4)
             Add(Pixelated(new Rect(Canvas.GetLeft(area), Canvas.GetTop(area), area.Width, area.Height)));
-        else if (_tool != Tool.Blur && (drawn is not Rectangle box || box.Width >= 2 && box.Height >= 2))
+        else if (_tool != Tool.Blur && (drawn is not (Rectangle or Ellipse) || drawn is Shape { Width: >= 2, Height: >= 2 }))
             Add(drawn);
     }
 
@@ -269,6 +335,50 @@ internal sealed class AnnotateWindow : Window
         if (!_layer.Children.Contains(item))
             _layer.Children.Add(item);
         _items.Add(item);
+        _redo.Clear();
+    }
+
+    private static bool ShiftDown => Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
+
+    /// <summary>With Shift, a line or arrow snaps to the nearest 45 degrees.</summary>
+    private Point Snap(Point p)
+    {
+        if (!ShiftDown)
+            return p;
+        var v = p - _start;
+        var angle = Math.Round(Math.Atan2(v.Y, v.X) / (Math.PI / 4)) * (Math.PI / 4);
+        return Clamp(_start + new Vector(Math.Cos(angle), Math.Sin(angle)) * v.Length);
+    }
+
+    /// <summary>With Shift, a box or ellipse stays square.</summary>
+    private Point Square(Point p)
+    {
+        if (!ShiftDown)
+            return p;
+        var side = Math.Max(Math.Abs(p.X - _start.X), Math.Abs(p.Y - _start.Y));
+        return Clamp(new Point(_start.X + Math.Sign(p.X - _start.X) * side, _start.Y + Math.Sign(p.Y - _start.Y) * side));
+    }
+
+    /// <summary>A numbered circle for step-by-step notes; the number follows how many are already placed.</summary>
+    private Grid Step(Point at, Brush brush)
+    {
+        var number = _items.Count(i => i is FrameworkElement { Tag: "step" }) + 1;
+        var size = Math.Max(24, _stroke * 10) * Math.Sqrt(_size);
+        var light = _color.R * 0.299 + _color.G * 0.587 + _color.B * 0.114 > 160;
+        var step = new Grid { Width = size, Height = size, Tag = "step" };
+        step.Children.Add(new Ellipse { Fill = brush, Stroke = Brushes.White, StrokeThickness = Math.Max(1.5, size / 14) });
+        step.Children.Add(new TextBlock
+        {
+            Text = number.ToString(),
+            Foreground = light ? Brushes.Black : Brushes.White,
+            FontWeight = FontWeights.Bold,
+            FontSize = size * 0.55,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        Canvas.SetLeft(step, at.X - size / 2);
+        Canvas.SetTop(step, at.Y - size / 2);
+        return step;
     }
 
     private void Undo()
@@ -282,7 +392,16 @@ internal sealed class AnnotateWindow : Window
         if (_items.Count == 0)
             return;
         _layer.Children.Remove(_items[^1]);
+        _redo.Push(_items[^1]);
         _items.RemoveAt(_items.Count - 1);
+    }
+
+    private void Redo()
+    {
+        if (!_redo.TryPop(out var item))
+            return;
+        _layer.Children.Add(item);
+        _items.Add(item);
     }
 
     private Point Clamp(Point p) => new(Math.Clamp(p.X, 0, _image.PixelWidth), Math.Clamp(p.Y, 0, _image.PixelHeight));
