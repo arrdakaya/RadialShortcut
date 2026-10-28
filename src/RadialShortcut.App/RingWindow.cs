@@ -20,9 +20,8 @@ namespace RadialShortcut.App;
 /// </summary>
 public sealed class RingWindow : Window
 {
-    private static readonly Color TextColor = Color.FromRgb(0xE8, 0xEA, 0xED);
-    private static readonly Color LabelColor = Color.FromRgb(0xB8, 0xBC, 0xC3);
-    private static readonly Brush MutedBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x9A, 0xA0, 0xA8)));
+    // Light or dark, fixed when the window is built; rings are rebuilt when the theme changes.
+    private readonly GlassColors _glass = Palette.Glass;
 
     private readonly RingStyle _style;
     private readonly GestureSettings _settings;
@@ -36,6 +35,7 @@ public sealed class RingWindow : Window
     private string? _idleHint;
     private readonly StackPanel _centerText = new();
     private readonly Color _accent2;
+    private readonly Color _activeText;
     private readonly Ellipse _centerRing = new();
     private readonly Ellipse _rim = new();
     private readonly ScaleTransform _rimScale;
@@ -63,6 +63,8 @@ public sealed class RingWindow : Window
         _items = items;
         _accent = (Color)ColorConverter.ConvertFromString(style.Accent);
         _accent2 = HueShift(_accent, 45);
+        // White reads on the dark ring's glow; on the light ring it washes out, so the hovered slice goes deep accent.
+        _activeText = Palette.IsDark ? Colors.White : Darken(_accent, 0.35);
         _center = style.Size / 2;
         _step = 360.0 / items.Count;
         _indicatorRotation = new RotateTransform(0, _center, _center);
@@ -373,11 +375,11 @@ public sealed class RingWindow : Window
             RadiusY = r1,
             GradientStops =
             {
-                new GradientStop(Color.FromArgb(0xF4, 0x1E, 0x20, 0x25), r0 / r1),
-                new GradientStop(Color.FromArgb(0xF4, 0x30, 0x33, 0x3A), 1),
+                new GradientStop(_glass.Inner, r0 / r1),
+                new GradientStop(_glass.Outer, 1),
             },
         });
-        var stroke = Freeze(new SolidColorBrush(Color.FromArgb(0x1E, 0xFF, 0xFF, 0xFF)));
+        var stroke = Freeze(new SolidColorBrush(_glass.Edge));
 
         for (var i = 0; i < _items.Count; i++)
         {
@@ -393,7 +395,7 @@ public sealed class RingWindow : Window
             var icon = AppIcon(_items[i]) ?? (FrameworkElement)new Path
             {
                 Data = Geometry.Parse(_items[i].Icon),
-                Stroke = new SolidColorBrush(TextColor),
+                Stroke = new SolidColorBrush(_glass.Text),
                 StrokeThickness = 1.7,
                 StrokeStartLineCap = PenLineCap.Round,
                 StrokeEndLineCap = PenLineCap.Round,
@@ -408,7 +410,7 @@ public sealed class RingWindow : Window
             {
                 Text = _items[i].Label,
                 FontSize = 11,
-                Foreground = new SolidColorBrush(LabelColor),
+                Foreground = new SolidColorBrush(_glass.Label),
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 Margin = new Thickness(0, 3, 0, 0),
@@ -427,7 +429,7 @@ public sealed class RingWindow : Window
 
             canvas.Children.Add(path);
             canvas.Children.Add(content);
-            _slices.Add(new Slice(path, content, icon, label, shapeScale, scale, glow));
+            _slices.Add(new Slice(path, content, icon, label, shapeScale, scale, glow, _glass, _activeText));
         }
     }
 
@@ -521,7 +523,7 @@ public sealed class RingWindow : Window
 
     private void BuildCenter(Canvas canvas, double size)
     {
-        var fill = new RadialGradientBrush(Color.FromRgb(0x2C, 0x2F, 0x36), Color.FromRgb(0x1A, 0x1C, 0x21))
+        var fill = new RadialGradientBrush(WithAlpha(_glass.CenterLight, 0xFF), WithAlpha(_glass.CenterDark, 0xFF))
         {
             GradientOrigin = new Point(0.5, 0.3),
             Center = new Point(0.5, 0.4),
@@ -543,9 +545,9 @@ public sealed class RingWindow : Window
 
         _title.FontSize = 12;
         _title.FontWeight = FontWeights.SemiBold;
-        _title.Foreground = Freeze(new SolidColorBrush(TextColor));
+        _title.Foreground = Freeze(new SolidColorBrush(_glass.Text));
         _hint.FontSize = 10;
-        _hint.Foreground = MutedBrush;
+        _hint.Foreground = Freeze(new SolidColorBrush(_glass.Muted));
         _hint.Margin = new Thickness(0, 1, 0, 0);
         foreach (var t in new[] { _title, _hint })
         {
@@ -554,7 +556,7 @@ public sealed class RingWindow : Window
             t.TextTrimming = TextTrimming.CharacterEllipsis;
         }
         _title.MaxHeight = 32;
-        _hint.MaxHeight = 26;
+        _hint.MaxHeight = 30; // two lines; at 26 the second line (~13.3px each) was cut off
 
         _centerText.Width = size - 14;
         _centerText.Children.Add(_title);
@@ -570,7 +572,7 @@ public sealed class RingWindow : Window
 
     /// <summary>Hairline that is brighter on top, like light catching the upper edge.</summary>
     private Brush EdgeBrush(double radius) => Freeze(new LinearGradientBrush(
-        [new GradientStop(Color.FromArgb(0x38, 0xFF, 0xFF, 0xFF), 0), new GradientStop(Color.FromArgb(0x0A, 0xFF, 0xFF, 0xFF), 1)],
+        [new GradientStop(_glass.EdgeTop, 0), new GradientStop(_glass.EdgeBottom, 1)],
         new Point(0, _center - radius), new Point(0, _center + radius)) { MappingMode = BrushMappingMode.Absolute });
 
     /// <summary>Annular sector with a constant-width gap between neighbours. Angles in degrees, clockwise from up.</summary>
@@ -597,6 +599,9 @@ public sealed class RingWindow : Window
 
     internal static Color Lighten(Color c, double t) =>
         Color.FromRgb((byte)(c.R + (255 - c.R) * t), (byte)(c.G + (255 - c.G) * t), (byte)(c.B + (255 - c.B) * t));
+
+    internal static Color Darken(Color c, double t) =>
+        Color.FromRgb((byte)(c.R * (1 - t)), (byte)(c.G * (1 - t)), (byte)(c.B * (1 - t)));
 
     internal static Color HueShift(Color c, double degrees)
     {
@@ -625,7 +630,7 @@ public sealed class RingWindow : Window
         return freezable;
     }
 
-    private sealed record Slice(Path Shape, FrameworkElement Content, FrameworkElement Icon, TextBlock Label, ScaleTransform ShapeScale, ScaleTransform ContentScale, DropShadowEffect Glow)
+    private sealed record Slice(Path Shape, FrameworkElement Content, FrameworkElement Icon, TextBlock Label, ScaleTransform ShapeScale, ScaleTransform ContentScale, DropShadowEffect Glow, GlassColors Colors, Color Active)
     {
         private int _glowToken;
 
@@ -635,8 +640,8 @@ public sealed class RingWindow : Window
             // leaves a short trail instead of hard flicker.
             var colors = TimeSpan.FromMilliseconds(active ? 90 : 180);
             if (Icon is Path line)
-                Fade(line.Stroke, active ? Colors.White : TextColor, colors);
-            Fade(Label.Foreground, active ? Colors.White : LabelColor, colors);
+                Fade(line.Stroke, active ? Active : Colors.Text, colors);
+            Fade(Label.Foreground, active ? Active : Colors.Label, colors);
             // The glow is attached only while it shows: an invisible effect still costs a blur pass every frame.
             var token = ++_glowToken;
             Icon.Effect = Glow;

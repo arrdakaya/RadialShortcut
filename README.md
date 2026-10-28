@@ -32,7 +32,7 @@ Settings live in `%AppData%\RadialShortcut\config.json`. You can define per-app 
 | Right-click + drag | Screen ring |
 | Right-click + drag with files selected in Explorer | File ring |
 | Shift + right-click + drag | The other ring |
-| Shift + drag a file | Drop zones: drop the file on a tool |
+| Drag a file and pause (or press Shift mid-drag) | Drop zones: drop the file on a tool |
 | Ctrl + Alt + Space | Ring from the keyboard |
 
 A plain right-click still works as usual.

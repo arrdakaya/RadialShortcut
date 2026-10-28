@@ -26,6 +26,21 @@ internal static class Palette
     public static Brush Muted => Brush(IsDark ? 0xA8A8A8 : 0x5F6670);
     public static Brush Accent => Brush(0x0067C0);
 
+    /// <summary>The ring's and drop strip's glassy colors; taken once per window, since IsDark reads the registry.</summary>
+    public static GlassColors Glass => IsDark ? DarkGlass : LightGlass;
+
+    private static readonly GlassColors DarkGlass = new(
+        Argb(0xF41E2025), Argb(0xF430333A), Argb(0xF42C2F36), Argb(0xF41A1C21),
+        Argb(0x1EFFFFFF), Argb(0x38FFFFFF), Argb(0x0AFFFFFF),
+        Argb(0xFFE8EAED), Argb(0xFFB8BCC3), Argb(0xFF9AA0A8), 0.45);
+
+    private static readonly GlassColors LightGlass = new(
+        Argb(0xF4E6E8EC), Argb(0xF4FBFBFC), Argb(0xF4FFFFFF), Argb(0xF4ECEEF1),
+        Argb(0x22000000), Argb(0x0C000000), Argb(0x2A000000),
+        Argb(0xFF1F2328), Argb(0xFF464C55), Argb(0xFF6B727C), 0.22);
+
+    private static Color Argb(uint argb) => Color.FromArgb((byte)(argb >> 24), (byte)(argb >> 16), (byte)(argb >> 8), (byte)argb);
+
     private static SolidColorBrush Brush(int rgb)
     {
         var brush = new SolidColorBrush(Color.FromRgb((byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb));
@@ -46,3 +61,14 @@ internal static class Palette
         }
     }
 }
+
+/// <param name="Inner">Slice fill toward the center.</param>
+/// <param name="Outer">Slice fill at the rim.</param>
+/// <param name="CenterLight">Center disc / strip background, lit side.</param>
+/// <param name="CenterDark">Center disc / strip background, far side.</param>
+/// <param name="Edge">Hairline between slices and around tiles.</param>
+/// <param name="EdgeTop">Outline at the top of the disc and strip.</param>
+/// <param name="EdgeBottom">Outline at the bottom.</param>
+/// <param name="Shadow">Opacity of the strip's drop shadow.</param>
+internal sealed record GlassColors(Color Inner, Color Outer, Color CenterLight, Color CenterDark,
+    Color Edge, Color EdgeTop, Color EdgeBottom, Color Text, Color Label, Color Muted, double Shadow);

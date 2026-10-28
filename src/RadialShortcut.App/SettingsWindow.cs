@@ -25,6 +25,7 @@ internal sealed class SettingsWindow : Window
     private static SettingsWindow? _open;
 
     private const string GearIcon = "M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6 M12 2v3 M12 19v3 M2 12h3 M19 12h3 M4.9 4.9l2.1 2.1 M17 17l2.1 2.1 M4.9 19.1L7 17 M17 7l2.1-2.1";
+    private const string HelpIcon = "M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18 M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6 M12 17h.01";
     private const string RingIcon = "M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18 M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8 M12 3v5 M12 16v5 M3 12h5 M16 12h5";
     private const string FolderIcon = "M3 6h6l2 2h10v11H3z";
     private const string PlusIcon = "M12 5v14 M5 12h14";
@@ -84,7 +85,7 @@ internal sealed class SettingsWindow : Window
     private readonly ContentControl _page = new();
     private readonly List<(Pill Pill, TextBlock Text, Shape Icon)> _nav = [];
     private readonly TextBlock _status = new() { TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center, FontSize = 12 };
-    private FrameworkElement? _generalPage, _ringsPage;
+    private FrameworkElement? _generalPage, _ringsPage, _helpPage;
     private int _pageIndex;
 
     // Genel
@@ -137,7 +138,8 @@ internal sealed class SettingsWindow : Window
     private readonly StackPanel _valuePanel = new();
     private readonly TextBlock _sliceProblem = new() { Foreground = Danger, FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) };
 
-    public static void ShowOrActivate(HotkeyRing? hotkey, Func<Task<bool>> checkUpdate, Func<Action<string>, Task<string?>> installUpdate)
+    /// <param name="page">0 general, 1 rings, 2 help; null keeps the page an open window is on.</param>
+    public static void ShowOrActivate(HotkeyRing? hotkey, Func<Task<bool>> checkUpdate, Func<Action<string>, Task<string?>> installUpdate, int? page = null)
     {
         if (_open is null)
         {
@@ -146,6 +148,8 @@ internal sealed class SettingsWindow : Window
             _open = window;
             _open.Show();
         }
+        if (page is { } index)
+            _open.ShowPage(index);
         if (_open.WindowState == WindowState.Minimized)
             _open.WindowState = WindowState.Normal;
         _open.Activate();
@@ -264,7 +268,7 @@ internal sealed class SettingsWindow : Window
         head.Children.Add(name);
 
         var nav = new StackPanel { Margin = new Thickness(10, 0, 10, 0) };
-        foreach (var (i, label, icon) in new[] { (0, "Genel", GearIcon), (1, "Halkalar", RingIcon) })
+        foreach (var (i, label, icon) in new[] { (0, "Genel", GearIcon), (1, "Halkalar", RingIcon), (2, "Nasıl kullanılır", HelpIcon) })
         {
             var shape = IconShape(icon, Palette.Muted);
             var text = new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, FontSize = 14 };
@@ -343,7 +347,12 @@ internal sealed class SettingsWindow : Window
     {
         _pageIndex = index;
         var built = _ringsPage is not null;
-        _page.Content = index == 0 ? _generalPage ??= GeneralPage() : _ringsPage ??= RingsPage();
+        _page.Content = index switch
+        {
+            0 => _generalPage ??= GeneralPage(),
+            1 => _ringsPage ??= RingsPage(),
+            _ => _helpPage ??= HelpPage(),
+        };
         if (index == 1 && built)
             RebuildPreview(animate: true);
         for (var i = 0; i < _nav.Count; i++)
@@ -375,6 +384,40 @@ internal sealed class SettingsWindow : Window
     }
 
     // ---- Genel ----
+
+    // ---- Nasıl kullanılır ----
+
+    /// <summary>Every gesture and shortcut in one place, so nothing depends on a notification seen once.</summary>
+    private FrameworkElement HelpPage()
+    {
+        var page = new StackPanel { MaxWidth = 720, Margin = new Thickness(36, 30, 36, 30), HorizontalAlignment = HorizontalAlignment.Left };
+        page.Children.Add(PageTitle("Nasıl kullanılır", "Halkalar, sürükleme araçları ve kısayollar."));
+
+        page.Children.Add(Section("Halka",
+            Row("Aç ve seç", "Sağ tuşu basılı tut, fareyi bir dilime doğru çek ve bırak. Ortada bırakırsan hiçbir şey olmaz.", Keycaps("Sağ tuş")),
+            Row("Dosya halkası", "Explorer'da dosya seçiliyken kendiliğinden açılır. Halka açıkken Shift'i basılı tutunca da geçer.", Keycaps("Shift")),
+            Row("Uygulama halkası", "Halka açıkken Ctrl'i basılı tut. Ctrl + sağ tuşla doğrudan da açılır.", Keycaps("Ctrl")),
+            Row("Geri dönmek", "Shift ya da Ctrl'i bırakınca halka varsayılana döner.", Empty()),
+            Row("Touchpad", "Klavye kısayolunu basılı tut, imleçle dilime git, bırak. Kısayol Genel sayfasından değişir.", Keycaps(_settings.RingHotkey.Split('+')))));
+
+        page.Children.Add(Section("Dosya sürükleme",
+            Row("Araç şeridi", "Explorer'dan bir dosyayı sürüklerken imleci bir an sabit tut ya da Shift'e bas. Dosyaya uyan araçlar çıkar; dosyayı birinin üstüne bırak.", Keycaps("Bekle", "Shift")),
+            Row("Hangi araçlar", "Resim: dönüştür, sıkıştır, boyutlandır, not ekle, arka planı kaldır. Video: dönüştür, sıkıştır, boyutlandır, kırp. Ses: dönüştür, sıkıştır, kırp. PDF: dönüştür.", Empty())));
+
+        page.Children.Add(Section("Not ekle",
+            Row("Araçlar", "Ok, çizgi, kutu, elips, kalem, fosforlu, numara, bulanık, metin, kırp. Rakam tuşları sırayla seçer.", Keycaps("1", "…", "0")),
+            Row("Kalınlık", "Üstteki listeden ya da köşeli parantezlerle.", Keycaps("[", "]")),
+            Row("Düz çizgi, kare", "Çizerken Shift: çizgi ve ok 45°'ye oturur, kutu ve elips kare kalır.", Keycaps("Shift")),
+            Row("Geri al, yinele", "", Keycaps("Ctrl", "Z / Y")),
+            Row("Kaydet ve kopyala", "Esc kapatır.", Keycaps("Enter"))));
+
+        page.Children.Add(Section("Tepsi ve ayarlar",
+            Row("Tepsi simgesi", "Tıkla: bu pencere. Sağ tık: menü, güncellemeleri denetle, çıkış.", Empty()),
+            Row("Halkaları düzenle", "Halkalar sayfasında dilim ekle, taşı, sil. \"Uygulamalardan seç…\" kurulu uygulamaları listeler. Bitince Kaydet'e bas.", Empty())));
+        return Scroll(page);
+    }
+
+    private static UIElement Empty() => new Border();
 
     private FrameworkElement GeneralPage()
     {

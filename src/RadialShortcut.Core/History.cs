@@ -66,6 +66,21 @@ public static class History
         return entries;
     }
 
+    /// <summary>Drops entries (texts the user no longer wants listed) by rewriting the file without them.</summary>
+    public static void Remove(string file, IEnumerable<HistoryEntry> entries)
+    {
+        try
+        {
+            if (!File.Exists(file))
+                return;
+            var gone = entries.Select(e => JsonSerializer.Serialize(e)).ToHashSet();
+            File.WriteAllLines(file, File.ReadAllLines(file).Where(l => l.Length > 0 && !gone.Contains(l)));
+        }
+        catch (IOException)
+        {
+        }
+    }
+
     /// <summary>Case- and accent-insensitive match on file name, tool and text.</summary>
     public static bool Matches(HistoryEntry entry, string query)
     {

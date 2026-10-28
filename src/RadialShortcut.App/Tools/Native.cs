@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows;
 using System.Windows.Interop;
+using RadialShortcut.Input;
 
 namespace RadialShortcut.App.Tools;
 
@@ -87,6 +88,17 @@ internal static class Native
     });
 
     public static void MoveCursor(int x, int y) => SetCursorPos(x, y);
+
+    public static ScreenPoint CursorPosition() => GetCursorPos(out var p) ? new ScreenPoint(p.X, p.Y) : default;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct CURSORPOINT
+    {
+        public int X, Y;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern bool GetCursorPos(out CURSORPOINT point);
 
     /// <summary>Keeps a window out of screenshots and recordings (Windows 10 2004+), so our own UI never shows in them.</summary>
     public static void ExcludeFromCapture(Window window) =>

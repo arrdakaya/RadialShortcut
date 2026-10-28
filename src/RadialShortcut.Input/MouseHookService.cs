@@ -37,19 +37,18 @@ public sealed class MouseHookService : IGestureSink, IDisposable
     public event Action<GestureEvent>? Event;
 
     /// <summary>
-    /// Shift held while the left button drags past a few pixels: raised once per drag, on the hook
-    /// thread, with the press point. <see cref="DragEnded"/> follows when the button comes up.
+    /// The left button dragged past a few pixels: raised once per drag, on the hook thread, with the
+    /// press point. <see cref="DragEnded"/> follows when the button comes up.
     /// </summary>
-    public event Action<ScreenPoint>? ShiftDragStarted;
+    public event Action<ScreenPoint>? DragStarted;
 
-    /// <summary>The same drag without Shift, raised once; Shift pressed later still raises <see cref="ShiftDragStarted"/>.</summary>
-    public event Action<ScreenPoint>? PlainDragStarted;
+    /// <summary>The left button went down, on the hook thread; lets a drag look at what was pressed before anything covers it.</summary>
+    public event Action<ScreenPoint>? LeftPressed;
 
     public event Action? DragEnded;
 
     private ScreenPoint? _leftDown;
     private bool _dragRaised;
-    private bool _plainRaised;
 
     public volatile bool Paused;
 
@@ -128,38 +127,31 @@ public sealed class MouseHookService : IGestureSink, IDisposable
 
     private bool Handle(int message, ScreenPoint p)
     {
-        WatchShiftDrag(message, p);
+        WatchDrag(message, p);
         return Dispatch(message, p);
     }
 
-    private void WatchShiftDrag(int message, ScreenPoint p)
+    private void WatchDrag(int message, ScreenPoint p)
     {
         switch (message)
         {
             case WM_LBUTTONDOWN:
                 _leftDown = p;
-                _dragRaised = _plainRaised = false;
+                _dragRaised = false;
+                LeftPressed?.Invoke(p); // even when paused, so a later drag never sees an older press
                 break;
             case WM_LBUTTONUP:
                 _leftDown = null;
-                if (_dragRaised || _plainRaised)
+                if (_dragRaised)
                 {
-                    _dragRaised = _plainRaised = false;
+                    _dragRaised = false;
                     DragEnded?.Invoke();
                 }
                 break;
             case WM_MOUSEMOVE when _leftDown is { } start && !_dragRaised && !Paused
                 && Math.Abs(p.X - start.X) + Math.Abs(p.Y - start.Y) > 12:
-                if ((GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0)
-                {
-                    _dragRaised = true;
-                    ShiftDragStarted?.Invoke(start);
-                }
-                else if (!_plainRaised)
-                {
-                    _plainRaised = true;
-                    PlainDragStarted?.Invoke(p);
-                }
+                _dragRaised = true;
+                DragStarted?.Invoke(start);
                 break;
         }
     }

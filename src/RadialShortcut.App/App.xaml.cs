@@ -4,6 +4,7 @@ using System.Windows.Threading;
 using System.Windows;
 using System.Windows.Controls;
 using H.NotifyIcon;
+using Microsoft.Win32;
 using RadialShortcut.App.Tools;
 using RadialShortcut.Core;
 using RadialShortcut.Input;
@@ -23,6 +24,8 @@ public partial class App : Application
     private RingCatalog _catalog = new([], 8);
     private readonly Dictionary<string, RingWindow> _rings = [];
     private RingWindow? _ring; // The ring of the current gesture.
+    private bool _darkRings; // The theme the ring windows were built with.
+    private bool _welcomeShown; // The welcome notice is up; clicking it opens the help page.
     private IntPtr _ringTarget; // The window under the gesture, kept for a switch to the file ring.
     private string _ringLayer = RingLayers.Main;
     private FileSystemWatcher? _configWatcher;
@@ -94,36 +97,21 @@ public partial class App : Application
 
         _hook = new MouseHookService(_settings);
         _hook.Event += ev => Dispatcher.BeginInvoke(() => OnGesture(ev));
-        _hook.ShiftDragStarted += start => Dispatcher.BeginInvoke(() =>
-        {
-            // Only drags that start in Explorer or on the desktop can be carrying files. Matched by
-            // process: the desktop's window class differs between Windows builds.
-            var source = Native.WindowAt(start.X, start.Y);
-            var process = Native.ProcessName(source);
-            var fromShell = process.Equals("explorer.exe", StringComparison.OrdinalIgnoreCase);
-            _debug?.Note($"Shift-sürükleme: {process} / {Native.ClassName(source)} → {(fromShell ? "alan açıldı" : "yok sayıldı")}");
-            DragHint.Dismiss();
-            if (fromShell)
-                DropZones.ShowAt(start);
-        });
-        _hook.PlainDragStarted += at => Dispatcher.BeginInvoke(() =>
-        {
-            // Only file drags out of Explorer or the desktop, not every window move or text selection.
-            var source = Native.WindowAt(at.X, at.Y);
-            if (SelectedFiles.IsExplorer(source) || SelectedFiles.IsDesktop(source)
-                || Native.ProcessName(source).Equals("explorer.exe", StringComparison.OrdinalIgnoreCase))
-                DragHint.ShowAt(at);
-        });
-        _hook.DragEnded += () => Dispatcher.BeginInvoke(() =>
-        {
-            DragHint.Dismiss();
-            DropZones.EndDrag();
-        });
+        _hook.LeftPressed += at => Dispatcher.BeginInvoke(() => FileDrag.Pressed(at));
+        _hook.DragStarted += start => Dispatcher.BeginInvoke(() => FileDrag.Started(start, _debug is null ? null : _debug.Note));
+        _hook.DragEnded += () => Dispatcher.BeginInvoke(FileDrag.Ended);
         _hotkey = new HotkeyRing(OpenFromHotkey, Release);
         LoadConfig(startup: true);
         StartUpdateChecks();
         _hook.Start();
         WatchConfig();
+        SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
+        _tray.TrayBalloonTipClicked += (_, _) =>
+        {
+            if (_welcomeShown)
+                OpenSettings(page: 2);
+        };
+        _tray.TrayBalloonTipClosed += (_, _) => _welcomeShown = false;
         // One notification per start: the welcome, the update result, or just that it is running.
         if (!Welcome() && !SayUpdated())
             _tray?.ShowNotification("RadialShortcut başladı", "Tepside çalışıyor. Sağ tuşu basılı tutup çek: halka açılır.");
@@ -159,8 +147,9 @@ public partial class App : Application
             return false;
         _tray?.ShowNotification("RadialShortcut çalışıyor",
             "Sağ tuşu basılı tutup fareyi bir yöne çek: halka açılır, bırakınca seçilir.\n"
-            + "Explorer'da dosya seçiliyken dosya halkası açılır. Dosyayı sürüklerken Shift'e basarsan araçlar çıkar.\n"
-            + "Tepsi simgesine tıkla: ayarlar. Sağ tık: menü.");
+            + "Explorer'da dosya seçiliyken dosya halkası açılır. Dosyayı sürüklerken bir an bekletirsen araçlar çıkar.\n"
+            + "Tıkla: nasıl kullanılır. Tepsi simgesi: ayarlar, sağ tık: menü.");
+        _welcomeShown = true;
         try { File.WriteAllText(AppPaths.WelcomedFile, ""); } catch (IOException) { }
         return true;
     }
@@ -187,12 +176,7 @@ public partial class App : Application
 
         _ringStyle = config.RingStyle();
         _catalog = new RingCatalog(config.Rings, _settings.SliceCount);
-        foreach (var window in _rings.Values)
-            window.Close();
-        _rings.Clear();
-        // The global rings open most often, so they are built ahead of time; per-app rings on first use.
-        foreach (var ring in _catalog.Globals)
-            WindowFor(ring);
+        RebuildRings();
 
         if (_catalog.Warnings.Count > 0)
             _tray?.ShowNotification("config.json: bazı halkalar atlandı", string.Join("\n", _catalog.Warnings.Take(4)));
@@ -200,6 +184,30 @@ public partial class App : Application
             _tray?.ShowNotification("config.json", hotkeyProblem);
         else if (!startup)
             _tray?.ShowNotification("Ayarlar yüklendi", $"{_catalog.All.Count()} halka hazır.");
+    }
+
+    /// <summary>Drops every ring window; they take their colors when built.</summary>
+    private void RebuildRings()
+    {
+        _darkRings = Palette.IsDark;
+        foreach (var window in _rings.Values)
+            window.Close();
+        _rings.Clear();
+        _ring = null; // Closed with the rest; the next gesture picks a fresh one.
+        // The global rings open most often, so they are built ahead of time; per-app rings on first use.
+        foreach (var ring in _catalog.Globals)
+            WindowFor(ring);
+    }
+
+    /// <summary>With the "system" theme the rings follow Windows switching between light and dark.</summary>
+    private void OnUserPreferenceChanged(object sender, UserPreferenceChangedEventArgs e)
+    {
+        if (e.Category == UserPreferenceCategory.General)
+            Dispatcher.BeginInvoke(() =>
+            {
+                if (Palette.IsDark != _darkRings)
+                    RebuildRings();
+            });
     }
 
     private RingWindow WindowFor(Ring ring)
@@ -342,7 +350,7 @@ public partial class App : Application
     /// <summary>Under the title while nothing is hovered: the rings still reachable from this one.</summary>
     private static string? IdleHint(string layer) => layer switch
     {
-        RingLayers.Main => "Shift: dosya · Ctrl: uygulama",
+        RingLayers.Main => "Shift: dosya\nCtrl: uygulama",
         RingLayers.Files => "Ctrl: uygulama",
         _ => null,
     };
@@ -472,6 +480,7 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
         _configWatcher?.Dispose();
         _hotkey?.Dispose();
         _hook?.Dispose();
@@ -498,9 +507,11 @@ public partial class App : Application
             _debug?.Hide();
     }
 
-    private void OnTrayLeftClick(object sender, RoutedEventArgs e) => SettingsWindow.ShowOrActivate(_hotkey, CheckForUpdateAsync, InstallUpdateAsync);
+    private void OnTrayLeftClick(object sender, RoutedEventArgs e) => OpenSettings();
 
-    private void OnSettingsClick(object sender, RoutedEventArgs e) => SettingsWindow.ShowOrActivate(_hotkey, CheckForUpdateAsync, InstallUpdateAsync);
+    private void OnSettingsClick(object sender, RoutedEventArgs e) => OpenSettings();
+
+    private void OpenSettings(int? page = null) => SettingsWindow.ShowOrActivate(_hotkey, CheckForUpdateAsync, InstallUpdateAsync, page);
 
     private void OnExitClick(object sender, RoutedEventArgs e) => Shutdown();
 }

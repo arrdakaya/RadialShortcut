@@ -11,7 +11,7 @@ namespace RadialShortcut.App.Tools;
 
 /// <summary>
 /// Kütüphane: everything the tools made, newest first, searchable (Ctrl+F). Enter opens,
-/// Ctrl+C copies, Del deletes the file. Files from before the history existed are listed too.
+/// Ctrl+C copies, Del deletes the file (or drops the text from the list). Files from before the history existed are listed too.
 /// </summary>
 internal sealed class LibraryWindow : Window
 {
@@ -25,7 +25,7 @@ internal sealed class LibraryWindow : Window
     };
 
     private readonly TextBox _search = new() { FontSize = 14, Padding = new Thickness(8, 6, 8, 6) };
-    private readonly ListBox _list = new() { BorderThickness = new Thickness(0), Background = Brushes.Transparent, HorizontalContentAlignment = HorizontalAlignment.Stretch };
+    private readonly ListBox _list = new() { BorderThickness = new Thickness(0), Background = Brushes.Transparent, HorizontalContentAlignment = HorizontalAlignment.Stretch, SelectionMode = SelectionMode.Extended };
     private readonly TextBlock _count = new() { FontSize = 11, Margin = new Thickness(2, 6, 0, 0) };
     private List<HistoryEntry> _all = [];
     private readonly Dictionary<string, BitmapSource> _thumbs = new(StringComparer.OrdinalIgnoreCase);
@@ -86,6 +86,9 @@ internal sealed class LibraryWindow : Window
     }
 
     private HistoryEntry? Selected => (_list.SelectedItem as FrameworkElement)?.Tag as HistoryEntry;
+
+    /// <summary>Every selected entry, in list order (Ctrl/Shift-click, Ctrl+A).</summary>
+    private List<HistoryEntry> AllSelected => _list.Items.OfType<FrameworkElement>().Where(_list.SelectedItems.Contains).Select(i => i.Tag).OfType<HistoryEntry>().ToList();
 
     private void OnKey(object sender, KeyEventArgs e)
     {
@@ -200,22 +203,40 @@ internal sealed class LibraryWindow : Window
 
     private void Copy()
     {
-        if (Selected is not { } entry)
-            return;
-        if (entry.Text is { } text)
-            ToolRunner.CopyText(text);
-        else if (entry.Path is { } path)
-            ToolRunner.Retry(() => Clipboard.SetFileDropList(new StringCollection { path }));
+        var entries = AllSelected;
+        var paths = new StringCollection();
+        paths.AddRange(entries.Select(e => e.Path).OfType<string>().ToArray());
+        if (paths.Count > 0)
+            ToolRunner.Retry(() => Clipboard.SetFileDropList(paths));
+        else if (entries.Count > 0)
+            ToolRunner.CopyText(string.Join("\n\n", entries.Select(e => e.Text)));
     }
 
     private async void Delete()
     {
-        if (Selected?.Path is not { } path)
-            return;
         var anchor = new Int32Rect((int)Left, (int)Top, (int)ActualWidth, 1);
-        if (!await ResultCard.AskAsync("Dosya silinsin mi?", Path.GetFileName(path), "Sil", anchor))
+        var entries = AllSelected;
+        var texts = entries.Where(e => e.Text is not null).ToList();
+        var paths = entries.Select(e => e.Path).OfType<string>().ToList();
+        string question, detail;
+        if (entries.Count == 1)
+        {
+            question = texts.Count == 1 ? "Yazı kütüphaneden silinsin mi?" : "Dosya silinsin mi?";
+            detail = texts.Count == 1 ? Shorten(texts[0].Text!) : Path.GetFileName(paths[0]);
+        }
+        else if (entries.Count > 1)
+        {
+            question = $"{entries.Count} kayıt silinsin mi?";
+            detail = string.Join(", ", new[] { paths.Count > 0 ? $"{paths.Count} dosya diskten" : null, texts.Count > 0 ? $"{texts.Count} yazı listeden" : null }.OfType<string>());
+        }
+        else
             return;
-        ToolRunner.TryDelete(path);
+        if (!await ResultCard.AskAsync(question, detail, "Sil", anchor))
+            return;
+        foreach (var path in paths)
+            ToolRunner.TryDelete(path);
+        if (texts.Count > 0)
+            History.Remove(AppPaths.HistoryFile, texts);
         Reload();
     }
 
