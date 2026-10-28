@@ -1,10 +1,13 @@
-# Pushing a tag like v0.9.0 tests, builds and publishes a release: the setup for people,
-# the zip and its checksum for the in-app updater. The version comes from the tag.
+# Raising <Version> in the app's csproj on main (or pushing a tag like v0.9.0) tests, builds
+# and publishes a release: the setup for people, the zip and its checksum for the in-app updater.
+# A push whose version already has a release does nothing.
 name: Release
 
 on:
   push:
     tags: ["v*.*.*"]
+    branches: [main]
+    paths: [src/RadialShortcut.App/RadialShortcut.App.csproj]
 
 permissions:
   contents: write
@@ -15,21 +18,34 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Version
+        id: version
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ('${{ github.ref_type }}' -eq 'tag') { $v = '${{ github.ref_name }}'.TrimStart('v') }
+          else { $v = ([xml](Get-Content src/RadialShortcut.App/RadialShortcut.App.csproj)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1 }
+          echo "VERSION=$v" >> $env:GITHUB_ENV
+          gh release view "v$v" *> $null
+          echo "skip=$($LASTEXITCODE -eq 0)" >> $env:GITHUB_OUTPUT
+          exit 0
+
       - uses: actions/setup-dotnet@v4
+        if: steps.version.outputs.skip != 'True'
         with:
           dotnet-version: 10.0.x
 
-      - name: Version from tag
-        shell: pwsh
-        run: echo "VERSION=$('${{ github.ref_name }}'.TrimStart('v'))" >> $env:GITHUB_ENV
-
       - name: Test
+        if: steps.version.outputs.skip != 'True'
         run: dotnet test tests/RadialShortcut.Tests -c Release
 
       - name: Publish
+        if: steps.version.outputs.skip != 'True'
         run: dotnet publish src/RadialShortcut.App -c Release -r win-x64 --self-contained true -p:Version=${{ env.VERSION }} -o artifacts/rel/app
 
       - name: Zip for the updater
+        if: steps.version.outputs.skip != 'True'
         shell: pwsh
         run: |
           Remove-Item artifacts/rel/app/*.pdb
@@ -38,18 +54,21 @@ jobs:
           "$hash  RadialShortcut-win-x64.zip" | Out-File artifacts/rel/RadialShortcut-win-x64.zip.sha256 -Encoding ascii -NoNewline
 
       - name: Setup
+        if: steps.version.outputs.skip != 'True'
         shell: pwsh
         run: |
           choco install innosetup -y --no-progress
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /Q /DAppVersion=${{ env.VERSION }} installer/RadialShortcut.iss
 
       - name: Release
+        if: steps.version.outputs.skip != 'True'
         env:
           GH_TOKEN: ${{ github.token }}
         run: >
-          gh release create ${{ github.ref_name }}
+          gh release create v${{ env.VERSION }}
           artifacts/rel/RadialShortcut-Setup.exe
           artifacts/rel/RadialShortcut-win-x64.zip
           artifacts/rel/RadialShortcut-win-x64.zip.sha256
+          --target ${{ github.sha }}
           --title "RadialShortcut ${{ env.VERSION }}"
           --generate-notes
