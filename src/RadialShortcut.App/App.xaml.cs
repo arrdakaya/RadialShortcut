@@ -60,12 +60,29 @@ public partial class App : Application
         _hook.Event += ev => Dispatcher.BeginInvoke(() => OnGesture(ev));
         _hook.ShiftDragStarted += start => Dispatcher.BeginInvoke(() =>
         {
-            // Only drags that start in Explorer or on the desktop can be carrying files.
+            // Only drags that start in Explorer or on the desktop can be carrying files. Matched by
+            // process: the desktop's window class differs between Windows builds.
             var source = Native.WindowAt(start.X, start.Y);
-            if (SelectedFiles.IsExplorer(source) || SelectedFiles.IsDesktop(source))
+            var process = Native.ProcessName(source);
+            var fromShell = process.Equals("explorer.exe", StringComparison.OrdinalIgnoreCase);
+            _debug?.Note($"Shift-sürükleme: {process} / {Native.ClassName(source)} → {(fromShell ? "alan açıldı" : "yok sayıldı")}");
+            DragHint.Dismiss();
+            if (fromShell)
                 DropZones.ShowAt(start);
         });
-        _hook.DragEnded += () => Dispatcher.BeginInvoke(DropZones.EndDrag);
+        _hook.PlainDragStarted += at => Dispatcher.BeginInvoke(() =>
+        {
+            // Only file drags out of Explorer or the desktop, not every window move or text selection.
+            var source = Native.WindowAt(at.X, at.Y);
+            if (SelectedFiles.IsExplorer(source) || SelectedFiles.IsDesktop(source)
+                || Native.ProcessName(source).Equals("explorer.exe", StringComparison.OrdinalIgnoreCase))
+                DragHint.ShowAt(at);
+        });
+        _hook.DragEnded += () => Dispatcher.BeginInvoke(() =>
+        {
+            DragHint.Dismiss();
+            DropZones.EndDrag();
+        });
         _hotkey = new HotkeyRing(OpenFromHotkey, Release);
         LoadConfig(startup: true);
         StartUpdateChecks();
@@ -82,7 +99,8 @@ public partial class App : Application
             return;
         _tray?.ShowNotification("RadialShortcut çalışıyor",
             "Sağ tuşu basılı tutup fareyi bir yöne çek: halka açılır, bırakınca seçilir.\n"
-            + "Explorer'da dosya seçiliyken dosya halkası açılır. Duraklatma ve ayarlar tepsi simgesinde.");
+            + "Explorer'da dosya seçiliyken dosya halkası açılır. Dosyayı sürüklerken Shift'e basarsan araçlar çıkar.\n"
+            + "Duraklatma ve ayarlar tepsi simgesinde.");
         try { File.WriteAllText(AppPaths.WelcomedFile, ""); } catch (IOException) { }
     }
 

@@ -35,5 +35,8 @@ public static class AppPaths
     /// <summary>Written once the first-run hint has been shown.</summary>
     public static string WelcomedFile => Path.Combine(ConfigDirectory, "welcomed");
 
+    /// <summary>How many times the "Shift: tools" drag hint has been shown; it stops after a few.</summary>
+    public static string DragHintFile => Path.Combine(ConfigDirectory, "drag-hint");
+
     public static void EnsureCreated() => Directory.CreateDirectory(ConfigDirectory);
 }

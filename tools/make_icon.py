@@ -1,4 +1,4 @@
-"""Renders the app icon (the ring itself, top slice selected) to PNG + multi-size ICO.
+"""Renders the app icon (white ring glyph on an accent tile, top segment popped out as selected) to PNG + multi-size ICO.
 
 Colors mirror RingWindow: accent #3D8BFF, accent2 = accent hue-shifted +45deg, dark slice fill.
 Usage: python tools/make_icon.py
@@ -20,8 +20,6 @@ def hex_rgb(h):
 ACCENT = hex_rgb("#3D8BFF")
 _h, _l, _s = colorsys.rgb_to_hls(*(ACCENT / 255))
 ACCENT2 = np.array(colorsys.hls_to_rgb((_h + 45 / 360) % 1, _l, _s)) * 255
-DARK_IN, DARK_OUT = hex_rgb("#3A3E47"), hex_rgb("#5A5F6A")
-CENTER_TOP, CENTER_BOT = hex_rgb("#33363E"), hex_rgb("#1C1E23")
 
 
 def render(size):
@@ -33,47 +31,38 @@ def render(size):
     ang = np.degrees(np.arctan2(dx, -dy)) % 360  # 0 = up, clockwise
 
     small = size <= 24
-    slices = 8
-    r_out = 0.90 if not small else 0.98
-    r_in = 0.42 if not small else 0.38
-    r_ctr = 0.35 if not small else 0.32
-    gap = (0.045 if not small else 0.09)  # gap width in unit space
-
     rgb = np.zeros((n, n, 3))
     a = np.zeros((n, n))
 
-    # Slices: a pixel is in a gap if its perpendicular distance to a divider ray is < gap/2.
-    half = 360 / slices / 2
-    local = (ang + half) % (360 / slices) - half  # angle relative to slice center
-    edge = np.radians(half - np.abs(local))
-    in_slice = (r >= r_in) & (r <= r_out) & (r * np.sin(edge) > gap / 2)
-    selected = in_slice & (np.abs(((ang + 180) % 360) - 180) < half)
+    # Rounded-square tile with a diagonal accent gradient; small sizes fill the whole canvas.
+    half_w = 0.94 if not small else 1.0
+    rad = 0.42 if not small else 0.36
+    qx, qy = np.abs(dx) - (half_w - rad), np.abs(dy) - (half_w - rad)
+    tile = np.hypot(np.maximum(qx, 0), np.maximum(qy, 0)) + np.minimum(np.maximum(qx, qy), 0) <= rad
+    k = np.clip((dx + dy + 2) / 4, 0, 1)[..., None]
+    rgb[tile] = (ACCENT * (1 - k) + ACCENT2 * k)[tile]
+    a[tile] = 1
+    if not small:  # soft top sheen
+        sheen = tile & (dy < 0)
+        rgb[sheen] = (rgb + (255 - rgb) * (0.10 * np.clip(-dy, 0, 1))[..., None])[sheen]
 
-    t = np.clip((r - r_in) / (r_out - r_in), 0, 1)[..., None]
-    rgb[in_slice] = (DARK_IN + (DARK_OUT - DARK_IN) * t)[in_slice]
-    rgb[selected] = (ACCENT2 * (1 - t) + ACCENT * t)[selected]
-    a[in_slice] = 1
+    # White ring: six segments, translucent; the top one solid and popped outward as "selected".
+    slices = 6
+    r_out, r_in = (0.62, 0.36) if not small else (0.80, 0.44)
+    gap = 0.10 if not small else 0.15
+    pop = 0.08 if not small else 0
+    half = 180 / slices
+    local = (ang + half) % (360 / slices) - half
+    clear = r * np.sin(np.radians(half - np.abs(local))) > gap / 2
+    is_top = np.abs(((ang + 180) % 360) - 180) < half
+    seg = tile & clear & ~is_top & (r >= r_in) & (r <= r_out)
+    top = tile & clear & is_top & (r >= r_in + pop) & (r <= r_out + pop)
+    rgb[seg] = (rgb + (255 - rgb) * 0.40)[seg]
+    rgb[top] = 255
 
-    # Faint light outer edge (like RingWindow's EdgeBrush) so the ring reads on a dark taskbar.
-    edge_w = 0.035 if not small else 0.08
-    outer = in_slice & ~selected & (r > r_out - edge_w)
-    rgb[outer] = rgb[outer] + (255 - rgb[outer]) * 0.35
-
-    # Selection arc just outside the selected slice.
-    if not small:
-        arc = (r > 0.935) & (r < 0.99) & (np.abs(((ang + 180) % 360) - 180) < half - 4)
-        light = ACCENT2 + (255 - ACCENT2) * 0.55
-        rgb[arc] = light
-        a[arc] = 1
-
-    # Center disc with an accent rim.
-    disc = r <= r_ctr
-    v = np.clip((dy + r_ctr) / (2 * r_ctr), 0, 1)[..., None]
-    k = np.clip((dx + dy + 2 * r_ctr) / (4 * r_ctr), 0, 1)[..., None]
-    rgb[disc] = ((ACCENT + (255 - ACCENT) * 0.15) * (1 - k) + ACCENT2 * k)[disc]
-    # Soft top highlight so the filled disc does not read as a flat dot.
-    rgb[disc] = (rgb + (255 - rgb) * 0.12 * (1 - v))[disc]
-    a[disc] = 1
+    # Center dot.
+    dot = r <= (0.18 if not small else 0.22)
+    rgb[dot] = 255
 
     # Premultiplied downsample for clean edges.
     pre = np.dstack([rgb * a[..., None], a])

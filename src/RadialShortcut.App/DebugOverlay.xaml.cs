@@ -70,6 +70,8 @@ public partial class DebugOverlay : Window
         ? new[] { "yukarı", "sağ üst", "sağ", "sağ alt", "aşağı", "sol alt", "sol", "sol üst" }[slice]
         : $"{slice * 360 / _settings.SliceCount}°";
 
+    public void Note(string line) => Add(line);
+
     private void Add(string line)
     {
         _log.Insert(0, $"{DateTime.Now:HH:mm:ss.fff}  {line}");

@@ -42,10 +42,14 @@ public sealed class MouseHookService : IGestureSink, IDisposable
     /// </summary>
     public event Action<ScreenPoint>? ShiftDragStarted;
 
+    /// <summary>The same drag without Shift, raised once; Shift pressed later still raises <see cref="ShiftDragStarted"/>.</summary>
+    public event Action<ScreenPoint>? PlainDragStarted;
+
     public event Action? DragEnded;
 
     private ScreenPoint? _leftDown;
     private bool _dragRaised;
+    private bool _plainRaised;
 
     public volatile bool Paused;
 
@@ -134,20 +138,28 @@ public sealed class MouseHookService : IGestureSink, IDisposable
         {
             case WM_LBUTTONDOWN:
                 _leftDown = p;
-                _dragRaised = false;
+                _dragRaised = _plainRaised = false;
                 break;
             case WM_LBUTTONUP:
                 _leftDown = null;
-                if (_dragRaised)
+                if (_dragRaised || _plainRaised)
                 {
-                    _dragRaised = false;
+                    _dragRaised = _plainRaised = false;
                     DragEnded?.Invoke();
                 }
                 break;
             case WM_MOUSEMOVE when _leftDown is { } start && !_dragRaised && !Paused
-                && Math.Abs(p.X - start.X) + Math.Abs(p.Y - start.Y) > 12 && (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0:
-                _dragRaised = true;
-                ShiftDragStarted?.Invoke(start);
+                && Math.Abs(p.X - start.X) + Math.Abs(p.Y - start.Y) > 12:
+                if ((GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0)
+                {
+                    _dragRaised = true;
+                    ShiftDragStarted?.Invoke(start);
+                }
+                else if (!_plainRaised)
+                {
+                    _plainRaised = true;
+                    PlainDragStarted?.Invoke(p);
+                }
                 break;
         }
     }
