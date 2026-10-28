@@ -151,8 +151,9 @@ internal static class FileTools
 
         string[] args = to switch
         {
-            // thumbnail picks a representative frame, so not the black first one.
-            "png" when kind == MediaKind.Video => ["-vf", "thumbnail=300", "-frames:v", "1"],
+            // thumbnail picks a representative frame, so not the black first one. Keyframes only:
+            // buffering every frame of a 4K video takes gigabytes.
+            "png" when kind == MediaKind.Video => ["-vf", "thumbnail=10", "-frames:v", "1"],
             "mp4" => ["-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart"],
             "webm" => ["-c:v", "libvpx-vp9", "-crf", "33", "-b:v", "0", "-row-mt", "1", "-cpu-used", "4", "-c:a", "libopus"],
             "gif" => ["-vf", "fps=12,scale='min(800,iw)':-2:flags=lanczos,split[a][b];[a]palettegen[p];[b][p]paletteuse", "-loop", "0"],
@@ -164,7 +165,8 @@ internal static class FileTools
             "ico" => ["-vf", "scale='min(256,iw)':'min(256,ih)':force_original_aspect_ratio=decrease", "-frames:v", "1"],
             _ => ["-frames:v", "1"], // png / jpg from a format WPF cannot read
         };
-        await Ffmpeg.RunAsync(input, args, output, progress, cancel);
+        string[] before = kind == MediaKind.Video && to == "png" ? ["-skip_frame", "nokey"] : [];
+        await Ffmpeg.RunAsync(input, args, output, progress, cancel, before);
         return output;
     }
 
@@ -174,12 +176,17 @@ internal static class FileTools
 
     private static async Task<string?> EditVideoAsync(string input, (string Label, string Tag, double Speed) edit, Action<double> progress, CancellationToken cancel)
     {
-        var output = FileJobs.OutputFor(input, edit.Tag, "mp4");
         if (edit.Speed == 1)
         {
-            await Ffmpeg.RunAsync(input, ["-an", "-c:v", "copy", "-movflags", "+faststart"], output, progress, cancel);
-            return output;
+            // A copied stream only fits its own kind of container (WMV into MP4 fails).
+            var ext = MediaKinds.Extension(input);
+            var muted = FileJobs.OutputFor(input, edit.Tag, ext);
+            string[] faststart = ext is "mp4" or "mov" or "m4v" ? ["-movflags", "+faststart"] : [];
+            await Ffmpeg.RunAsync(input, ["-an", "-c:v", "copy", .. faststart], muted, progress, cancel);
+            return muted;
         }
+
+        var output = FileJobs.OutputFor(input, edit.Tag, "mp4");
 
         var speed = edit.Speed.ToString(System.Globalization.CultureInfo.InvariantCulture);
         await Ffmpeg.RunAsync(input,
