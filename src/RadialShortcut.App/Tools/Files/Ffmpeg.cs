@@ -11,8 +11,9 @@ internal static partial class Ffmpeg
 {
     /// <param name="before">Options that must come before -i, such as a seek.</param>
     /// <param name="progress">0–100, once the length of the input is known. Called off the UI thread.</param>
+    /// <param name="stretch">Output length over input length, when a filter changes the speed.</param>
     public static async Task RunAsync(string input, IEnumerable<string> args, string output, Action<double>? progress, CancellationToken cancel,
-        IEnumerable<string>? before = null, TimeSpan? length = null)
+        IEnumerable<string>? before = null, TimeSpan? length = null, double stretch = 1)
     {
         var start = new ProcessStartInfo(ToolDeps.PathOf(ToolDeps.Ffmpeg))
         {
@@ -52,7 +53,7 @@ internal static partial class Ffmpeg
         while (await process.StandardOutput.ReadLineAsync() is { } line)
         {
             if (line.StartsWith("out_time_us=") && long.TryParse(line[12..], out var us) && length is { TotalSeconds: > 0 } total)
-                progress?.Invoke(Math.Clamp(us / 1e6 / total.TotalSeconds * 100, 0, 100));
+                progress?.Invoke(Math.Clamp(us / 1e6 / (total.TotalSeconds * stretch) * 100, 0, 100));
         }
         await process.WaitForExitAsync();
         await readErrors;

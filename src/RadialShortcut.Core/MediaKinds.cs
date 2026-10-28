@@ -28,7 +28,7 @@ public static class MediaKinds
         string[] all = Of(path) switch
         {
             MediaKind.Image => ["png", "jpg", "webp", "pdf", "ico"],
-            MediaKind.Video => ["mp4", "gif", "webm", "mp3", "m4a"],
+            MediaKind.Video => ["mp4", "gif", "webm", "mp3", "m4a", "wav", "png"],
             MediaKind.Audio => ["mp3", "m4a", "wav", "ogg"],
             MediaKind.Pdf => ["png", "jpg"],
             _ => [],

@@ -17,13 +17,23 @@ internal static class FileTools
 
         var targets = MediaKinds.ConvertTargets(files[0]).ToList();
         var kind = MediaKinds.Of(files[0]);
-        var choices = targets.Select(t => t.ToUpperInvariant()).ToList();
+        var choices = targets.Select(t => t == "png" && kind == MediaKind.Video ? "Kare (PNG)" : t.ToUpperInvariant()).ToList();
         if (kind == MediaKind.Image && files.Count > 1)
             choices.Add("Tek PDF");
+        if (kind == MediaKind.Video)
+            choices.AddRange(VideoEdits.Select(e => e.Label));
 
         var pick = await ResultCard.ChooseAsync("Dönüştür", Describe(files), choices, anchor);
         if (pick < 0)
             return;
+
+        if (kind == MediaKind.Video && pick >= targets.Count)
+        {
+            var edit = VideoEdits[pick - targets.Count];
+            if (await ToolDeps.EnsureAsync(anchor, ToolDeps.Ffmpeg))
+                await FileJobs.RunAsync("convert", "Dönüştürülüyor", files, anchor, (input, progress, cancel) => EditVideoAsync(input, edit, progress, cancel));
+            return;
+        }
 
         if (pick == targets.Count)
         {
@@ -141,6 +151,8 @@ internal static class FileTools
 
         string[] args = to switch
         {
+            // thumbnail picks a representative frame, so not the black first one.
+            "png" when kind == MediaKind.Video => ["-vf", "thumbnail=300", "-frames:v", "1"],
             "mp4" => ["-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart"],
             "webm" => ["-c:v", "libvpx-vp9", "-crf", "33", "-b:v", "0", "-row-mt", "1", "-cpu-used", "4", "-c:a", "libopus"],
             "gif" => ["-vf", "fps=12,scale='min(800,iw)':-2:flags=lanczos,split[a][b];[a]palettegen[p];[b][p]paletteuse", "-loop", "0"],
@@ -153,6 +165,27 @@ internal static class FileTools
             _ => ["-frames:v", "1"], // png / jpg from a format WPF cannot read
         };
         await Ffmpeg.RunAsync(input, args, output, progress, cancel);
+        return output;
+    }
+
+    // Speed 1 means the audio is dropped and the picture copied untouched.
+    private static readonly (string Label, string Tag, double Speed)[] VideoEdits =
+        [("Sessiz", " (sessiz)", 1), ("2x hız", " (2x)", 2), ("0.5x hız", " (0.5x)", 0.5)];
+
+    private static async Task<string?> EditVideoAsync(string input, (string Label, string Tag, double Speed) edit, Action<double> progress, CancellationToken cancel)
+    {
+        var output = FileJobs.OutputFor(input, edit.Tag, "mp4");
+        if (edit.Speed == 1)
+        {
+            await Ffmpeg.RunAsync(input, ["-an", "-c:v", "copy", "-movflags", "+faststart"], output, progress, cancel);
+            return output;
+        }
+
+        var speed = edit.Speed.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        await Ffmpeg.RunAsync(input,
+            ["-vf", $"setpts=PTS/{speed}", "-af", $"atempo={speed}",
+             "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart"],
+            output, progress, cancel, stretch: 1 / edit.Speed);
         return output;
     }
 

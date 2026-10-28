@@ -71,7 +71,19 @@ public partial class App : Application
         StartUpdateChecks();
         _hook.Start();
         WatchConfig();
+        Welcome();
         Dispatcher.BeginInvoke(SelectedFiles.WarmUp, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+    }
+
+    /// <summary>First launch: the app lives in the tray, so say how to reach it once.</summary>
+    private void Welcome()
+    {
+        if (File.Exists(AppPaths.WelcomedFile))
+            return;
+        _tray?.ShowNotification("RadialShortcut çalışıyor",
+            "Sağ tuşu basılı tutup fareyi bir yöne çek: halka açılır, bırakınca seçilir.\n"
+            + "Explorer'da dosya seçiliyken dosya halkası açılır. Duraklatma ve ayarlar tepsi simgesinde.");
+        try { File.WriteAllText(AppPaths.WelcomedFile, ""); } catch (IOException) { }
     }
 
     /// <summary>

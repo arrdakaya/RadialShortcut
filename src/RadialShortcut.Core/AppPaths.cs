@@ -32,5 +32,8 @@ public static class AppPaths
 
     public static string HistoryFile => Path.Combine(ConfigDirectory, "history.jsonl");
 
+    /// <summary>Written once the first-run hint has been shown.</summary>
+    public static string WelcomedFile => Path.Combine(ConfigDirectory, "welcomed");
+
     public static void EnsureCreated() => Directory.CreateDirectory(ConfigDirectory);
 }
