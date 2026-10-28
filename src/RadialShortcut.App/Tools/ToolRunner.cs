@@ -207,7 +207,7 @@ public static class ToolRunner
             return null;
         }
 
-        var result = await engine.RecognizeAsync(ToSoftwareBitmap(Upscale(region.Image)));
+        var result = await engine.RecognizeAsync(ToSoftwareBitmap(Upscale(LightBackground(region.Image))));
         var text = string.Join(Environment.NewLine, result.Lines.Select(l => l.Text)).Trim();
         if (text.Length == 0)
         {
@@ -217,15 +217,40 @@ public static class ToolRunner
         return text;
     }
 
-    /// <summary>OCR and barcode readers miss small details; doubling small captures helps a lot.</summary>
+    /// <summary>
+    /// OCR and barcode readers miss small details such as code punctuation at screen text size;
+    /// enlarging 2-3x (as far as the engine's size limit allows) helps a lot.
+    /// </summary>
     private static BitmapSource Upscale(BitmapSource image)
     {
-        if (image.PixelHeight >= 120 || image.PixelWidth * 2 > OcrEngine.MaxImageDimension)
+        var factor = Math.Min(image.PixelHeight < 400 ? 3.0 : 2.0, (double)OcrEngine.MaxImageDimension / Math.Max(image.PixelWidth, image.PixelHeight));
+        if (factor < 1.25)
             return image;
 
-        var scaled = new TransformedBitmap(image, new ScaleTransform(2, 2));
+        var scaled = new TransformedBitmap(image, new ScaleTransform(factor, factor));
         scaled.Freeze();
         return scaled;
+    }
+
+    /// <summary>Windows OCR reads dark text on a light ground far better, so dark themes are inverted first.</summary>
+    private static BitmapSource LightBackground(BitmapSource image)
+    {
+        var (pixels, w, h) = Bgra(image);
+        long luma = 0;
+        for (var i = 0; i < pixels.Length; i += 4)
+            luma += (pixels[i] * 114 + pixels[i + 1] * 587 + pixels[i + 2] * 299) / 1000;
+        if (luma / Math.Max(pixels.Length / 4, 1) >= 128)
+            return image;
+
+        for (var i = 0; i < pixels.Length; i += 4)
+        {
+            pixels[i] = (byte)(255 - pixels[i]);
+            pixels[i + 1] = (byte)(255 - pixels[i + 1]);
+            pixels[i + 2] = (byte)(255 - pixels[i + 2]);
+        }
+        var inverted = BitmapSource.Create(w, h, image.DpiX, image.DpiY, PixelFormats.Bgra32, null, pixels, w * 4);
+        inverted.Freeze();
+        return inverted;
     }
 
     internal static (byte[] Pixels, int Width, int Height) Bgra(BitmapSource image)
