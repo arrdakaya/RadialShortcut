@@ -25,6 +25,7 @@ public partial class App : Application
     private FileSystemWatcher? _configWatcher;
     private DispatcherTimer? _reloadTimer;
     private HotkeyRing? _hotkey;
+    private const string DefaultUpdateRepo = "arrdakaya/RadialShortcut";
     private string? _updateRepo;
     private Updater.Release? _update;
     private DispatcherTimer? _updateTimer;
@@ -87,7 +88,7 @@ public partial class App : Application
         }
 
         Palette.Theme = config.Theme;
-        _updateRepo = string.IsNullOrWhiteSpace(config.UpdateRepo) ? null : config.UpdateRepo.Trim();
+        _updateRepo = string.IsNullOrWhiteSpace(config.UpdateRepo) ? DefaultUpdateRepo : config.UpdateRepo.Trim();
         var hotkeyProblem = _hotkey is not null && !_hotkey.Register(config.RingHotkey)
             ? $"Klavye kısayolu \"{config.RingHotkey}\" kullanılamıyor (geçersiz ya da başka bir uygulamada)."
             : null;
