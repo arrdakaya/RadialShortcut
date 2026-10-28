@@ -207,43 +207,21 @@ public sealed class RingWindow : Window
 
     private void AppearNow()
     {
-        var ms = Math.Max(_style.OpenAnimationMs, 1);
-        var spring = new BackEase { Amplitude = 0.45, EasingMode = EasingMode.EaseOut };
-        _root.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(ms * 0.5))
-        {
-            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
-        });
-        AnimateScale(0.72, 1, TimeSpan.FromMilliseconds(ms), spring);
+        // One quick fade and scale of the whole ring: anything more makes opening feel sluggish.
+        var duration = TimeSpan.FromMilliseconds(Math.Clamp(_style.OpenAnimationMs, 1, 120));
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        _root.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, duration) { EasingFunction = ease });
+        AnimateScale(0.9, 1, duration, ease);
 
-        // A thin accent ring flashes around the edge as the ring lands, then fades away.
-        _rim.BeginAnimation(OpacityProperty, new DoubleAnimationUsingKeyFrames
+        _rim.BeginAnimation(OpacityProperty, null);
+        _rim.Opacity = 0;
+        foreach (var slice in _slices)
         {
-            KeyFrames =
-            {
-                new LinearDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.Zero)),
-                new EasingDoubleKeyFrame(0.9, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(ms * 0.6)), new CubicEase { EasingMode = EasingMode.EaseOut }),
-                new EasingDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(ms + 380)), new CubicEase { EasingMode = EasingMode.EaseIn }),
-            },
-        });
-        var rimGrow = new DoubleAnimation(0.9, 1.03, TimeSpan.FromMilliseconds(ms + 380)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        _rimScale.BeginAnimation(ScaleTransform.ScaleXProperty, rimGrow);
-        _rimScale.BeginAnimation(ScaleTransform.ScaleYProperty, rimGrow);
-
-        // Slices pop out one after another clockwise from the top, quickly enough not to delay a flick.
-        var stagger = Math.Min(16.0, ms * 0.6 / Math.Max(_slices.Count, 1));
-        for (var i = 0; i < _slices.Count; i++)
-        {
-            var begin = TimeSpan.FromMilliseconds(i * stagger);
-            var fade = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(ms * 0.7))
-            {
-                BeginTime = begin,
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
-            };
-            var pop = new DoubleAnimation(0.8, 1, TimeSpan.FromMilliseconds(ms)) { BeginTime = begin, EasingFunction = spring };
-            _slices[i].Shape.BeginAnimation(OpacityProperty, fade);
-            _slices[i].Content.BeginAnimation(OpacityProperty, fade);
-            _slices[i].ShapeScale.BeginAnimation(ScaleTransform.ScaleXProperty, pop);
-            _slices[i].ShapeScale.BeginAnimation(ScaleTransform.ScaleYProperty, pop);
+            slice.Shape.BeginAnimation(OpacityProperty, null);
+            slice.Shape.Opacity = 1;
+            slice.ShapeScale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+            slice.ShapeScale.BeginAnimation(ScaleTransform.ScaleYProperty, null);
+            slice.ShapeScale.ScaleX = slice.ShapeScale.ScaleY = 1;
         }
     }
 
@@ -262,7 +240,7 @@ public sealed class RingWindow : Window
             _slices[selected].Pulse();
 
         var ease = new CubicEase { EasingMode = EasingMode.EaseIn };
-        var duration = TimeSpan.FromMilliseconds(selected >= 0 ? 170 : 110);
+        var duration = TimeSpan.FromMilliseconds(selected >= 0 ? 90 : 60);
         _root.BeginAnimation(OpacityProperty, new DoubleAnimation(0, duration) { EasingFunction = ease });
         AnimateScale(_rootScale.ScaleX, selected >= 0 ? 1.05 : 0.94, duration, ease);
     }
@@ -283,7 +261,7 @@ public sealed class RingWindow : Window
         GetMonitorInfo(monitor, ref info);
         var scale = GetDpiForMonitor(monitor, 0, out var dpi, out _) == 0 ? dpi / 96.0 : 1.0;
         _deadZonePx = Math.Max(_style.InnerRadius * scale, _settings.DeadZonePx);
-        _cancelBeyondPx = _style.OuterRadius * scale * 1.5;
+        _cancelBeyondPx = _style.OuterRadius * scale * 1.2;
 
         var work = info.rcWork;
         var (cx, cy) = RingGeometry.FitInside(origin.X, origin.Y, _style.OuterRadius * scale, work.Left, work.Top, work.Right, work.Bottom);

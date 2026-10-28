@@ -84,6 +84,7 @@ internal sealed class SettingsWindow : Window
     private readonly List<(Pill Pill, TextBlock Text, Shape Icon)> _nav = [];
     private readonly TextBlock _status = new() { TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center, FontSize = 12 };
     private FrameworkElement? _generalPage, _ringsPage;
+    private int _pageIndex;
 
     // Genel
     private readonly ChordBox _ringHotkey = new(minKeys: 2);
@@ -135,8 +136,9 @@ internal sealed class SettingsWindow : Window
     {
         if (_open is null)
         {
-            _open = new SettingsWindow(hotkey, checkUpdate);
-            _open.Closed += (_, _) => _open = null;
+            var window = new SettingsWindow(hotkey, checkUpdate);
+            window.Closed += (_, _) => { if (_open == window) _open = null; };
+            _open = window;
             _open.Show();
         }
         if (_open.WindowState == WindowState.Minimized)
@@ -182,6 +184,8 @@ internal sealed class SettingsWindow : Window
         root.Children.Add(content);
         Content = root;
 
+        Resources.Add(typeof(ScrollBar), ScrollBarStyle());
+        PaintScrollBars(_settings.RingStyle().Accent);
         FillGeneral();
         ShowPage(0);
         _previewTimer.Tick += (_, _) =>
@@ -276,6 +280,9 @@ internal sealed class SettingsWindow : Window
     private FrameworkElement Footer()
     {
         var buttons = new StackPanel { Orientation = Orientation.Horizontal };
+        var revert = TextButton("Değişiklikleri geri al", Revert, Kind.Ghost);
+        revert.Margin = new Thickness(0, 0, 8, 0);
+        buttons.Children.Add(revert);
         buttons.Children.Add(TextButton("Kapat", Close, Kind.Secondary));
         var save = TextButton("Kaydet", () => Save(), Kind.Primary);
         save.Margin = new Thickness(8, 0, 0, 0);
@@ -288,8 +295,41 @@ internal sealed class SettingsWindow : Window
         return new Border { BorderBrush = Palette.Line, BorderThickness = new Thickness(0, 1, 0, 0), Background = SidebarBrush, Child = bar };
     }
 
+    /// <summary>
+    /// Throws away unsaved edits by reopening the window from config.json, on the same page and spot;
+    /// simpler and surer than putting every editor back by hand.
+    /// </summary>
+    private void Revert()
+    {
+        if (!_dirty)
+        {
+            Say("Geri alınacak bir değişiklik yok.");
+            return;
+        }
+        if (MessageBox.Show(this, "Kaydedilmemiş tüm değişiklikler silinsin mi?", "RadialShortcut Ayarları", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK)
+            return;
+
+        _dirty = false;
+        var fresh = new SettingsWindow(_hotkey, _checkUpdate)
+        {
+            WindowStartupLocation = WindowStartupLocation.Manual,
+            Left = Left,
+            Top = Top,
+            Width = Width,
+            Height = Height,
+            WindowState = WindowState,
+        };
+        fresh.Closed += (_, _) => { if (_open == fresh) _open = null; };
+        _open = fresh;
+        fresh.Show();
+        fresh.ShowPage(_pageIndex);
+        fresh.Say("Değişiklikler geri alındı.");
+        Close();
+    }
+
     private void ShowPage(int index)
     {
+        _pageIndex = index;
         var built = _ringsPage is not null;
         _page.Content = index == 0 ? _generalPage ??= GeneralPage() : _ringsPage ??= RingsPage();
         if (index == 1 && built)
@@ -610,9 +650,68 @@ internal sealed class SettingsWindow : Window
     private void PaintSwatches()
     {
         var current = _settings.RingStyle().Accent;
+        PaintScrollBars(current);
         foreach (var (pill, color) in _swatches)
             pill.Paint(Brushes.Transparent, HoverBrush, color.Equals(current, StringComparison.OrdinalIgnoreCase) ? Palette.Text : Brushes.Transparent);
     }
+
+    /// <summary>The scroll thumb takes the ring accent, softer at rest and full on hover or drag.</summary>
+    private void PaintScrollBars(string accent)
+    {
+        var color = (Color)ColorConverter.ConvertFromString(accent);
+        Resources["ScrollThumb"] = Frozen(new SolidColorBrush(Color.FromArgb(0x70, color.R, color.G, color.B)));
+        Resources["ScrollThumbHot"] = Frozen(new SolidColorBrush(color));
+    }
+
+    private static Brush Frozen(Brush brush)
+    {
+        brush.Freeze();
+        return brush;
+    }
+
+    /// <summary>A slim rounded thumb with no arrows or track, in place of the stock Windows bar; both orientations.</summary>
+    private static Style ScrollBarStyle() => (Style)System.Windows.Markup.XamlReader.Parse($"""
+        <Style xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" TargetType="ScrollBar">
+          <Setter Property="Width" Value="10"/>
+          <Setter Property="MinWidth" Value="10"/>
+          <Setter Property="Template">
+            <Setter.Value>{ScrollTemplate(vertical: true)}</Setter.Value>
+          </Setter>
+          <Style.Triggers>
+            <Trigger Property="Orientation" Value="Horizontal">
+              <Setter Property="Width" Value="NaN"/>
+              <Setter Property="MinWidth" Value="0"/>
+              <Setter Property="Height" Value="10"/>
+              <Setter Property="MinHeight" Value="10"/>
+              <Setter Property="Template">
+                <Setter.Value>{ScrollTemplate(vertical: false)}</Setter.Value>
+              </Setter>
+            </Trigger>
+          </Style.Triggers>
+        </Style>
+        """);
+
+    private static string ScrollTemplate(bool vertical) => $$"""
+        <ControlTemplate TargetType="ScrollBar">
+          <Track x:Name="PART_Track" IsDirectionReversed="{{vertical}}" Margin="{{(vertical ? "2,4" : "4,2")}}">
+            <Track.DecreaseRepeatButton><RepeatButton Command="ScrollBar.{{(vertical ? "PageUp" : "PageLeft")}}Command" Opacity="0" Focusable="False"/></Track.DecreaseRepeatButton>
+            <Track.IncreaseRepeatButton><RepeatButton Command="ScrollBar.{{(vertical ? "PageDown" : "PageRight")}}Command" Opacity="0" Focusable="False"/></Track.IncreaseRepeatButton>
+            <Track.Thumb>
+              <Thumb {{(vertical ? "MinHeight" : "MinWidth")}}="28">
+                <Thumb.Template>
+                  <ControlTemplate TargetType="Thumb">
+                    <Border x:Name="Bar" CornerRadius="3" Background="{DynamicResource ScrollThumb}"/>
+                    <ControlTemplate.Triggers>
+                      <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bar" Property="Background" Value="{DynamicResource ScrollThumbHot}"/></Trigger>
+                      <Trigger Property="IsDragging" Value="True"><Setter TargetName="Bar" Property="Background" Value="{DynamicResource ScrollThumbHot}"/></Trigger>
+                    </ControlTemplate.Triggers>
+                  </ControlTemplate>
+                </Thumb.Template>
+              </Thumb>
+            </Track.Thumb>
+          </Track>
+        </ControlTemplate>
+        """;
 
     private FrameworkElement IconGrid()
     {
@@ -1093,7 +1192,14 @@ internal sealed class SettingsWindow : Window
 
     private void Browse()
     {
-        var dialog = new Microsoft.Win32.OpenFileDialog { Title = "Açılacak uygulama ya da dosya", Filter = "Uygulamalar|*.exe;*.lnk;*.bat;*.cmd|Tüm dosyalar|*.*" };
+        // Starts in the Start menu's shortcuts, where installed apps are easiest to find; shortcuts are kept as-is.
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Açılacak uygulama ya da dosya",
+            Filter = "Uygulamalar|*.exe;*.lnk;*.bat;*.cmd|Tüm dosyalar|*.*",
+            InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms),
+            DereferenceLinks = false,
+        };
         if (dialog.ShowDialog(this) == true)
             _sliceValue.Text = dialog.FileName;
     }
