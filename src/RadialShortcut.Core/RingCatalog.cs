@@ -21,6 +21,8 @@ public sealed class RingCatalog
 
     public Ring GlobalFor(string layer) => _globals[layer];
 
+    public IEnumerable<Ring> Globals => _globals.Values;
+
     public IEnumerable<Ring> All => _globals.Values.Concat(_specific.Select(s => s.Ring));
 
     /// <summary>What was skipped and why, in Turkish, for the tray notice.</summary>
@@ -124,6 +126,15 @@ public sealed class RingCatalog
         {
             return false;
         }
+    }
+
+    /// <summary>The slice as the ring draws it, or null and why not (for the settings preview).</summary>
+    public static RingItem? ItemFor(SliceConfig slice, out string? problem)
+    {
+        var warnings = new List<string>();
+        var item = ToItem(slice, "", warnings);
+        problem = warnings.FirstOrDefault()?.TrimStart(':', ' ');
+        return item;
     }
 
     private static RingItem? ToItem(SliceConfig slice, string ring, List<string> warnings)

@@ -35,7 +35,6 @@ public sealed class RingWindow : Window
     private readonly TextBlock _hint = new();
     private readonly StackPanel _centerText = new();
     private readonly Color _accent2;
-    private readonly RotateTransform _rootRotation = new();
     private readonly Ellipse _centerRing = new();
     private readonly Ellipse _rim = new();
     private readonly ScaleTransform _rimScale;
@@ -53,6 +52,8 @@ public sealed class RingWindow : Window
     private double _indicatorAngle;
     private double _deadZonePx;
     private double _cancelBeyondPx;
+    private EventHandler? _pendingOpen;
+    private readonly List<BitmapCache> _caches = [];
 
     public RingWindow(RingStyle style, GestureSettings settings, IReadOnlyList<RingItem> items)
     {
@@ -81,15 +82,15 @@ public sealed class RingWindow : Window
         var centerSize = Math.Max(2 * style.InnerRadius - 2 * style.Gap - 4, 40);
 
         var canvas = new Canvas { Width = style.Size, Height = style.Size };
-        canvas.Effect = new DropShadowEffect { BlurRadius = 28, ShadowDepth = 8, Direction = 270, Opacity = 0.45, Color = Colors.Black };
         BuildSlices(canvas);
         BuildIndicator(canvas);
         BuildCenter(canvas, centerSize);
 
+        _root.Children.Add(BuildShadow(centerSize));
         _root.Children.Add(canvas);
         _root.Opacity = 0;
         _root.RenderTransformOrigin = new Point(0.5, 0.5);
-        _root.RenderTransform = new TransformGroup { Children = { _rootScale, _rootRotation } };
+        _root.RenderTransform = _rootScale;
         Content = _root;
 
         SourceInitialized += (_, _) =>
@@ -97,7 +98,28 @@ public sealed class RingWindow : Window
             _hwnd = new WindowInteropHelper(this).Handle;
             var ex = GetWindowLong(_hwnd, GWL_EXSTYLE);
             SetWindowLong(_hwnd, GWL_EXSTYLE, ex | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE);
+            ScaleCaches(VisualTreeHelper.GetDpi(this).DpiScaleX);
         };
+    }
+
+    protected override void OnDpiChanged(DpiScale oldDpi, DpiScale newDpi)
+    {
+        base.OnDpiChanged(oldDpi, newDpi);
+        ScaleCaches(newDpi.DpiScaleX);
+    }
+
+    /// <summary>A bitmap cache renders at 96 DPI unless told otherwise, which blurs it on a scaled monitor.</summary>
+    private BitmapCache Cache()
+    {
+        var cache = new BitmapCache();
+        _caches.Add(cache);
+        return cache;
+    }
+
+    private void ScaleCaches(double scale)
+    {
+        foreach (var cache in _caches)
+            cache.RenderAtScale = scale;
     }
 
     /// <summary>Shows the ring centered on the press point, slid inside the monitor's work area if needed.</summary>
@@ -130,7 +152,60 @@ public sealed class RingWindow : Window
         return bitmap;
     }
 
+    /// <summary>
+    /// The ring lifted out of this window, which is never shown, for the settings preview. With
+    /// <paramref name="animate"/> it plays the open animation, otherwise it is simply there.
+    /// </summary>
+    public FrameworkElement TakeForPreview(bool animate)
+    {
+        Content = null;
+        if (animate)
+            AppearNow();
+        else
+            _root.Opacity = 1;
+        return _root;
+    }
+
+    /// <summary>Highlights a slice as if the cursor were on it; -1 clears.</summary>
+    public void Highlight(int slice) => SetHover(slice);
+
+    /// <summary>
+    /// The drop shadow as its own blurred silhouette, rasterized once and cached. A shadow effect on the
+    /// canvas itself would be re-blurred on every frame of the open animation, which made it stutter.
+    /// </summary>
+    private UIElement BuildShadow(double centerSize)
+    {
+        var shapes = new GeometryGroup();
+        for (var i = 0; i < _items.Count; i++)
+            shapes.Children.Add(Sector(_style.InnerRadius, _style.OuterRadius, i * _step - _step / 2, i * _step + _step / 2, _style.Gap));
+        shapes.Children.Add(new EllipseGeometry(new Point(_center, _center), centerSize / 2, centerSize / 2));
+        return new Path
+        {
+            Data = Freeze(shapes),
+            Fill = Brushes.Black,
+            Opacity = 0.45,
+            RenderTransform = new TranslateTransform(0, 8),
+            Effect = new BlurEffect { Radius = 28 },
+            CacheMode = Cache(),
+            IsHitTestVisible = false,
+        };
+    }
+
+    /// <summary>Starts the open animation on the first frame after the window is shown, so it does not skip ahead.</summary>
     private void Appear()
+    {
+        EventHandler? start = null;
+        start = (_, _) =>
+        {
+            CompositionTarget.Rendering -= start;
+            if (_pendingOpen == start)
+                AppearNow();
+        };
+        _pendingOpen = start;
+        CompositionTarget.Rendering += start;
+    }
+
+    private void AppearNow()
     {
         var ms = Math.Max(_style.OpenAnimationMs, 1);
         var spring = new BackEase { Amplitude = 0.45, EasingMode = EasingMode.EaseOut };
@@ -139,10 +214,6 @@ public sealed class RingWindow : Window
             EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
         });
         AnimateScale(0.72, 1, TimeSpan.FromMilliseconds(ms), spring);
-        _rootRotation.BeginAnimation(RotateTransform.AngleProperty, new DoubleAnimation(-14, 0, TimeSpan.FromMilliseconds(ms))
-        {
-            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
-        });
 
         // A thin accent ring flashes around the edge as the ring lands, then fades away.
         _rim.BeginAnimation(OpacityProperty, new DoubleAnimationUsingKeyFrames
@@ -185,6 +256,7 @@ public sealed class RingWindow : Window
     /// <summary>Fades the ring out. A chosen slice pulses and stays highlighted a little longer so the choice registers.</summary>
     public void Close(int selected)
     {
+        _pendingOpen = null;
         SetHover(selected);
         if (selected >= 0)
             _slices[selected].Pulse();
@@ -346,8 +418,8 @@ public sealed class RingWindow : Window
                 Height = 24,
                 LayoutTransform = new ScaleTransform(22.0 / 24, 22.0 / 24),
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Effect = new DropShadowEffect { BlurRadius = 12, ShadowDepth = 0, Color = Lighten(_accent, 0.2), Opacity = 0 },
             };
+            var glow = new DropShadowEffect { BlurRadius = 12, ShadowDepth = 0, Color = Lighten(_accent, 0.2), Opacity = 0 };
             var label = new TextBlock
             {
                 Text = _items[i].Label,
@@ -371,7 +443,7 @@ public sealed class RingWindow : Window
 
             canvas.Children.Add(path);
             canvas.Children.Add(content);
-            _slices.Add(new Slice(path, content, icon, label, shapeScale, scale));
+            _slices.Add(new Slice(path, content, icon, label, shapeScale, scale, glow));
         }
     }
 
@@ -399,6 +471,7 @@ public sealed class RingWindow : Window
             Stroke = Freeze(new SolidColorBrush(Lighten(_accent, 0.45))),
             StrokeThickness = 1.2,
             Effect = new DropShadowEffect { BlurRadius = 22, ShadowDepth = 0, Color = _accent, Opacity = 0.75 },
+            CacheMode = Cache(),
         });
 
         // Shimmer: a diagonal light band that starts parked off the slice and is swept across on hover.
@@ -426,6 +499,7 @@ public sealed class RingWindow : Window
             Data = Sector(r1 + 3, r1 + 8, -half + 4, half - 4, 0),
             Fill = Freeze(new LinearGradientBrush(Lighten(_accent2, 0.3), light, 0)),
             Effect = new DropShadowEffect { BlurRadius = 18, ShadowDepth = 0, Color = light, Opacity = 1 },
+            CacheMode = Cache(),
         });
 
         var rimSize = 2 * (r1 + 3);
@@ -434,6 +508,7 @@ public sealed class RingWindow : Window
         _rim.Stroke = Freeze(new LinearGradientBrush(Lighten(_accent, 0.3), Lighten(_accent2, 0.2), 45));
         _rim.Effect = new DropShadowEffect { BlurRadius = 14, ShadowDepth = 0, Color = _accent, Opacity = 0.8 };
         _rim.RenderTransform = _rimScale;
+        _rim.CacheMode = Cache();
         _rim.Opacity = 0;
         Canvas.SetLeft(_rim, _center - rimSize / 2);
         Canvas.SetTop(_rim, _center - rimSize / 2);
@@ -553,8 +628,10 @@ public sealed class RingWindow : Window
         return freezable;
     }
 
-    private sealed record Slice(Path Shape, FrameworkElement Content, Path Icon, TextBlock Label, ScaleTransform ShapeScale, ScaleTransform ContentScale)
+    private sealed record Slice(Path Shape, FrameworkElement Content, Path Icon, TextBlock Label, ScaleTransform ShapeScale, ScaleTransform ContentScale, DropShadowEffect Glow)
     {
+        private int _glowToken;
+
         public void SetActive(bool active)
         {
             // Entering a slice reacts quickly; leaving fades a bit slower so sweeping across the ring
@@ -562,7 +639,17 @@ public sealed class RingWindow : Window
             var colors = TimeSpan.FromMilliseconds(active ? 90 : 180);
             Fade(Icon.Stroke, active ? Colors.White : TextColor, colors);
             Fade(Label.Foreground, active ? Colors.White : LabelColor, colors);
-            Icon.Effect.BeginAnimation(DropShadowEffect.OpacityProperty, new DoubleAnimation(active ? 1 : 0, colors));
+            // The glow is attached only while it shows: an invisible effect still costs a blur pass every frame.
+            var token = ++_glowToken;
+            Icon.Effect = Glow;
+            var glow = new DoubleAnimation(active ? 1 : 0, colors);
+            if (!active)
+                glow.Completed += (_, _) =>
+                {
+                    if (token == _glowToken)
+                        Icon.Effect = null;
+                };
+            Glow.BeginAnimation(DropShadowEffect.OpacityProperty, glow);
 
             Scale(active ? 1.16 : 1, TimeSpan.FromMilliseconds(active ? 220 : 200),
                 active ? new BackEase { Amplitude = 0.6, EasingMode = EasingMode.EaseOut } : new CubicEase { EasingMode = EasingMode.EaseOut });

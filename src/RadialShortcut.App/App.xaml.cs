@@ -19,6 +19,7 @@ public partial class App : Application
     private MouseHookService? _hook;
     private DebugOverlay? _debug;
     private GestureSettings _settings = new();
+    private RingStyle _ringStyle = new();
     private RingCatalog _catalog = new([], 8);
     private readonly Dictionary<string, RingWindow> _rings = [];
     private RingWindow? _ring; // The ring of the current gesture.
@@ -44,6 +45,19 @@ public partial class App : Application
             return;
         }
 
+#if DEBUG
+        if (e.Args is ["--settings-shot", var shots])
+        {
+            base.OnStartup(e);
+            Dispatcher.InvokeAsync(async () =>
+            {
+                await SettingsWindow.ShotAsync(shots);
+                Shutdown();
+            });
+            return;
+        }
+#endif
+
         _singleInstance = new Mutex(initiallyOwned: true, MutexName, out var createdNew);
         if (!createdNew)
         {
@@ -62,11 +76,8 @@ public partial class App : Application
         _tray = (TaskbarIcon)FindResource("TrayIcon");
         _tray.ForceCreate();
 
-        var startupItem = (MenuItem)_tray.ContextMenu!.Items.OfType<MenuItem>().Single(i => i.Name == "StartupItem");
-        startupItem.IsChecked = StartupRegistration.IsEnabled();
-
         // The debug panel is for development builds only; released builds drop it and its menu item.
-        var debugItem = _tray.ContextMenu.Items.OfType<MenuItem>().Single(i => i.Name == "DebugItem");
+        var debugItem = _tray.ContextMenu!.Items.OfType<MenuItem>().Single(i => i.Name == "DebugItem");
 #if DEBUG
         _debug = new DebugOverlay(_settings);
         _debug.Show();
@@ -119,7 +130,7 @@ public partial class App : Application
         _tray?.ShowNotification("RadialShortcut çalışıyor",
             "Sağ tuşu basılı tutup fareyi bir yöne çek: halka açılır, bırakınca seçilir.\n"
             + "Explorer'da dosya seçiliyken dosya halkası açılır. Dosyayı sürüklerken Shift'e basarsan araçlar çıkar.\n"
-            + "Duraklatma ve ayarlar tepsi simgesinde.");
+            + "Tepsi simgesine tıkla: ayarlar. Sağ tık: menü.");
         try { File.WriteAllText(AppPaths.WelcomedFile, ""); } catch (IOException) { }
     }
 
@@ -143,24 +154,32 @@ public partial class App : Application
             : null;
         _hook?.SetExcludedProcesses(config.ExcludedProcesses?.Select(RingCatalog.ProcessName) ?? _settings.ExcludedProcesses);
 
+        _ringStyle = config.RingStyle();
         _catalog = new RingCatalog(config.Rings, _settings.SliceCount);
         foreach (var window in _rings.Values)
             window.Close();
         _rings.Clear();
-        // Built ahead of time so the first open of a ring is as quick as the rest.
-        foreach (var ring in _catalog.All)
-        {
-            var window = new RingWindow(new RingStyle(), _settings, ring.Items);
-            window.Show();
-            _rings[ring.Id] = window;
-        }
+        // The global rings open most often, so they are built ahead of time; per-app rings on first use.
+        foreach (var ring in _catalog.Globals)
+            WindowFor(ring);
 
         if (_catalog.Warnings.Count > 0)
             _tray?.ShowNotification("config.json: bazı halkalar atlandı", string.Join("\n", _catalog.Warnings.Take(4)));
         else if (hotkeyProblem is not null)
             _tray?.ShowNotification("config.json", hotkeyProblem);
         else if (!startup)
-            _tray?.ShowNotification("Ayarlar yüklendi", $"{_rings.Count} halka hazır.");
+            _tray?.ShowNotification("Ayarlar yüklendi", $"{_catalog.All.Count()} halka hazır.");
+    }
+
+    private RingWindow WindowFor(Ring ring)
+    {
+        if (!_rings.TryGetValue(ring.Id, out var window))
+        {
+            window = new RingWindow(_ringStyle, _settings, ring.Items);
+            window.Show();
+            _rings[ring.Id] = window;
+        }
+        return window;
     }
 
     /// <summary>Hand edits apply right away; saves come in bursts, so wait for them to settle.</summary>
@@ -188,7 +207,7 @@ public partial class App : Application
         _configWatcher.Renamed += (s, e) => restart(s, e);
     }
 
-    /// <summary>A reference for hand-editing until the settings window exists (Faz 5); rewritten on every start.</summary>
+    /// <summary>A reference for editing config.json by hand; rewritten on every start.</summary>
     private static void WriteExampleConfig()
     {
         try
@@ -241,7 +260,7 @@ public partial class App : Application
     private RingWindow RingFor(IntPtr target, string layer)
     {
         var ring = _catalog.For(Native.ProcessName(target), Native.WindowTitle(target), layer);
-        return _rings.GetValueOrDefault(ring.Id) ?? _rings[_catalog.GlobalFor(layer).Id];
+        return WindowFor(ring);
     }
 
     private RingWindow OpenFromHotkey(string layer, ScreenPoint at)
@@ -258,22 +277,48 @@ public partial class App : Application
             _ = RunAfterRingFadesAsync(ring.ItemAt(slice), origin);
     }
 
-    /// <summary>Only with "updateRepo" set: half a minute after start, then once a day.</summary>
+    /// <summary>Half a minute after start, then once a day.</summary>
     private void StartUpdateChecks()
     {
         _updateTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
         _updateTimer.Tick += async (_, _) =>
         {
             _updateTimer.Interval = TimeSpan.FromHours(24);
-            if (_updateRepo is null || _update is not null || await Updater.CheckAsync(_updateRepo) is not { } release)
-                return;
-            _update = release;
-            var item = TrayItem("UpdateItem");
-            item.Header = $"Güncelle (v{release.Version})";
-            item.Visibility = Visibility.Visible;
-            _tray?.ShowNotification("Güncelleme var", $"RadialShortcut {release.Version} hazır. Tepsi menüsünden \"Güncelle\" ile kurabilirsin.");
+            await CheckForUpdateAsync();
         };
         _updateTimer.Start();
+    }
+
+    /// <summary>True when a newer release is waiting behind the "Güncelle" item.</summary>
+    private async Task<bool> CheckForUpdateAsync()
+    {
+        if (_update is not null)
+            return true;
+        if (_updateRepo is null || await Updater.CheckAsync(_updateRepo) is not { } release)
+            return false;
+        _update = release;
+        var item = TrayItem("UpdateItem");
+        item.Header = $"Güncelle (v{release.Version})";
+        item.Visibility = Visibility.Visible;
+        _tray?.ShowNotification("Güncelleme var", $"RadialShortcut {release.Version} hazır. Tepsi menüsünden \"Güncelle\" ile kurabilirsin.");
+        return true;
+    }
+
+    private async void OnCheckUpdateClick(object sender, RoutedEventArgs e)
+    {
+        var item = (MenuItem)sender;
+        item.IsEnabled = false;
+        item.Header = "Denetleniyor…";
+        try
+        {
+            if (!await CheckForUpdateAsync())
+                _tray?.ShowNotification("Güncelleme yok", $"RadialShortcut {Updater.Current.ToString(3)} en son sürüm (ya da GitHub'a ulaşılamadı).");
+        }
+        finally
+        {
+            item.Header = "Güncellemeleri denetle";
+            item.IsEnabled = true;
+        }
     }
 
     private MenuItem TrayItem(string name) => _tray!.ContextMenu!.Items.OfType<MenuItem>().Single(i => i.Name == name);
@@ -333,17 +378,9 @@ public partial class App : Application
             _debug?.Hide();
     }
 
-    private void OnStartupClick(object sender, RoutedEventArgs e)
-    {
-        var item = (MenuItem)sender;
-        StartupRegistration.SetEnabled(item.IsChecked);
-        item.IsChecked = StartupRegistration.IsEnabled();
-    }
+    private void OnTrayLeftClick(object sender, RoutedEventArgs e) => SettingsWindow.ShowOrActivate(_hotkey, CheckForUpdateAsync);
 
-    private void OnOpenConfigFolderClick(object sender, RoutedEventArgs e)
-    {
-        Process.Start(new ProcessStartInfo(AppPaths.ConfigDirectory) { UseShellExecute = true });
-    }
+    private void OnSettingsClick(object sender, RoutedEventArgs e) => SettingsWindow.ShowOrActivate(_hotkey, CheckForUpdateAsync);
 
     private void OnExitClick(object sender, RoutedEventArgs e) => Shutdown();
 }

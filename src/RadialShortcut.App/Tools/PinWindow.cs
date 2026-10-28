@@ -47,7 +47,7 @@ internal sealed class PinWindow : Window
             LayoutTransform = _zoom,
         };
         RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.HighQuality);
-        Content = new Border
+        var frame = new Border
         {
             Margin = new Thickness(8), // room for the shadow
             BorderBrush = new SolidColorBrush(Color.FromRgb(0x4C, 0xA0, 0xFF)),
@@ -55,6 +55,10 @@ internal sealed class PinWindow : Window
             Effect = new DropShadowEffect { BlurRadius = 12, ShadowDepth = 2, Opacity = 0.4 },
             Child = image,
         };
+        var root = new Grid();
+        root.Children.Add(frame);
+        root.Children.Add(BuildCloseButton());
+        Content = root;
         ContextMenu = BuildMenu();
 
         Loaded += (_, _) =>
@@ -86,6 +90,56 @@ internal sealed class PinWindow : Window
     {
         var zoom = Math.Clamp(_zoom.ScaleX * factor, MinZoom, MaxZoom);
         _zoom.ScaleX = _zoom.ScaleY = zoom;
+    }
+
+    /// <summary>The ✕ in the top-right corner; dim until the cursor reaches it so it hides little of the picture.</summary>
+    private FrameworkElement BuildCloseButton()
+    {
+        var idle = new SolidColorBrush(Color.FromArgb(0xB0, 0x20, 0x20, 0x20));
+        var hover = new SolidColorBrush(Color.FromRgb(0xE0, 0x40, 0x40));
+        var button = new Border
+        {
+            Width = 22,
+            Height = 22,
+            CornerRadius = new CornerRadius(11),
+            Background = idle,
+            BorderBrush = Brushes.White,
+            BorderThickness = new Thickness(1),
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(0, 2, 2, 0), // straddles the frame's corner
+            Cursor = Cursors.Hand,
+            ToolTip = "Kapat",
+            Child = new System.Windows.Shapes.Path
+            {
+                Data = Geometry.Parse("M0,0 L8,8 M8,0 L0,8"),
+                Stroke = Brushes.White,
+                StrokeThickness = 1.6,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            },
+        };
+        button.MouseEnter += (_, _) => button.Background = hover;
+        button.MouseLeave += (_, _) => button.Background = idle;
+        // Handled here so the window's drag does not start and swallow the click.
+        // Closes only when the press also started on the button, like a real button.
+        button.MouseLeftButtonDown += (_, e) =>
+        {
+            e.Handled = true;
+            button.CaptureMouse();
+        };
+        button.MouseLeftButtonUp += (_, e) =>
+        {
+            e.Handled = true;
+            if (!button.IsMouseCaptured)
+                return;
+            button.ReleaseMouseCapture();
+            if (button.IsMouseOver)
+                Close();
+        };
+        return button;
     }
 
     private ContextMenu BuildMenu()

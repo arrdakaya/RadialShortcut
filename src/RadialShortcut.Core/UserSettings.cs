@@ -1,10 +1,12 @@
+using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace RadialShortcut.Core;
 
 /// <summary>
 /// What the app reads from config.json: tool options, excluded processes and rings.
-/// Edited by hand until the settings window exists (Faz 5); the app never writes it.
+/// Edited by hand or through the settings window, which rewrites the whole file on save.
 /// </summary>
 public sealed class UserSettings
 {
@@ -19,6 +21,21 @@ public sealed class UserSettings
 
     /// <summary>"system", "light" or "dark".</summary>
     public string Theme { get; set; } = "system";
+
+    /// <summary>Ring size relative to the default, 0.8–1.4.</summary>
+    public double RingScale { get; set; } = 1;
+
+    /// <summary>Ring highlight color as "#RRGGBB"; null keeps the default blue.</summary>
+    public string? RingAccent { get; set; }
+
+    /// <summary>The ring's look from <see cref="RingScale"/> and <see cref="RingAccent"/>, with bad values ignored.</summary>
+    public RingStyle RingStyle()
+    {
+        var style = new RingStyle();
+        var scale = Math.Clamp(double.IsFinite(RingScale) ? RingScale : 1, 0.8, 1.4);
+        style = style with { OuterRadius = style.OuterRadius * scale, InnerRadius = style.InnerRadius * scale };
+        return RingAccent is { } accent && System.Text.RegularExpressions.Regex.IsMatch(accent, "^#[0-9A-Fa-f]{6}$") ? style with { Accent = accent } : style;
+    }
 
     /// <summary>GitHub "owner/repo" whose releases carry updates; empty turns update checks off.</summary>
     public string? UpdateRepo { get; set; }
@@ -35,6 +52,9 @@ public sealed class UserSettings
         PropertyNameCaseInsensitive = true,
         ReadCommentHandling = JsonCommentHandling.Skip,
         AllowTrailingCommas = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        WriteIndented = true,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping, // keeps "Ş" and "ı" readable in the file
     };
 
     public static UserSettings Load(string file) => TryLoad(file, out var settings, out _) ? settings : new();
@@ -64,4 +84,19 @@ public sealed class UserSettings
     }
 
     public static UserSettings Parse(string json) => JsonSerializer.Deserialize<UserSettings>(json, Json) ?? new();
+
+    public string Serialize() => JsonSerializer.Serialize(this, Json);
+
+    /// <summary>A copy to edit without touching this one.</summary>
+    public UserSettings Clone() => Parse(Serialize());
+
+    /// <summary>Writes the file; the previous one is kept as config.json.bak, since hand-written comments do not survive.</summary>
+    public void Save(string file)
+    {
+        if (File.Exists(file))
+            File.Copy(file, file + ".bak", overwrite: true);
+        var temp = file + ".tmp";
+        File.WriteAllText(temp, Serialize());
+        File.Move(temp, file, overwrite: true);
+    }
 }

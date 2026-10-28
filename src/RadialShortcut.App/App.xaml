@@ -6,7 +6,9 @@
     <Application.Resources>
         <tb:TaskbarIcon x:Key="TrayIcon"
                         ToolTipText="RadialShortcut"
-                        MenuActivation="LeftOrRightClick">
+                        MenuActivation="RightClick"
+                        NoLeftClickDelay="True"
+                        TrayLeftMouseUp="OnTrayLeftClick">
             <tb:TaskbarIcon.IconSource>
                 <BitmapImage UriSource="pack://application:,,,/Assets/app.ico" />
             </tb:TaskbarIcon.IconSource>
@@ -16,8 +18,8 @@
                     <MenuItem Header="Kütüphane" Click="OnLibraryClick" />
                     <MenuItem x:Name="PauseItem" Header="Duraklat" IsCheckable="True" Click="OnPauseClick" />
                     <MenuItem x:Name="DebugItem" Header="Debug paneli" IsCheckable="True" IsChecked="False" Click="OnDebugClick" />
-                    <MenuItem x:Name="StartupItem" Header="Windows ile başlat" IsCheckable="True" Click="OnStartupClick" />
-                    <MenuItem Header="Ayar klasörünü aç" Click="OnOpenConfigFolderClick" />
+                    <MenuItem Header="Ayarlar…" Click="OnSettingsClick" />
+                    <MenuItem x:Name="CheckUpdateItem" Header="Güncellemeleri denetle" Click="OnCheckUpdateClick" />
                     <Separator />
                     <MenuItem Header="Çıkış" Click="OnExitClick" />
                 </ContextMenu>

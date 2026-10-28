@@ -23,6 +23,7 @@ internal sealed class HotkeyRing : IDisposable
     private RingWindow? _ring;
     private ScreenPoint _origin;
     private int _key;
+    private string? _chord;
 
     /// <param name="open">Shows the ring of a layer at a point and returns it.</param>
     /// <param name="release">Closes the ring with the chosen slice (-1: none) and runs it.</param>
@@ -37,6 +38,7 @@ internal sealed class HotkeyRing : IDisposable
     /// <summary>False with nothing registered when the text is not a chord or another app owns it.</summary>
     public bool Register(string? chord)
     {
+        _chord = chord;
         UnregisterHotKey(_window.Handle, Main);
         UnregisterHotKey(_window.Handle, Files);
         if (!KeyChord.TryParse(chord, out var keys) || keys.Length < 2)
@@ -51,6 +53,15 @@ internal sealed class HotkeyRing : IDisposable
             RegisterHotKey(_window.Handle, Files, mods | MOD_SHIFT | MOD_NOREPEAT, (uint)_key);
         return ok;
     }
+
+    /// <summary>Frees the hotkey while the settings window records a new one, so pressing it does not open the ring.</summary>
+    public void Suspend()
+    {
+        UnregisterHotKey(_window.Handle, Main);
+        UnregisterHotKey(_window.Handle, Files);
+    }
+
+    public void Resume() => Register(_chord);
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
