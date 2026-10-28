@@ -18,6 +18,7 @@
   "rings": [
     {
       // "layer": "files" olan halkalar Shift + sağ tuş basılı tutunca açılır (dosya halkası).
+      // "layer": "apps" olanlar Ctrl + sağ tuşla açılır (uygulama halkası).
       // Yazmazsan yerleşik dosya halkası kullanılır. Bu katmanda da "match" kullanılabilir.
       "id": "dosya",
       "name": "Dosya",

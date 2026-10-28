@@ -6,6 +6,7 @@ using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text.Json.Serialization;
 using RadialShortcut.App.Tools;
+using RadialShortcut.Core;
 
 namespace RadialShortcut.App;
 
@@ -56,7 +57,7 @@ internal static class Updater
     /// Downloads and checks the release, waits for running tools to finish, then hands over to a
     /// small script that swaps the folders once this process has exited and starts the new version.
     /// </summary>
-    public static async Task InstallAsync(Release release, Action<string> status)
+    public static async Task InstallAsync(Release release, Action<string> status, Action<double>? progress = null)
     {
         // A fresh folder each time: an app started by an older update may still have its old folder
         // as working directory, so that one cannot be deleted. Leftovers are cleared when they can be.
@@ -70,10 +71,30 @@ internal static class Updater
 
         status("Güncelleme indiriliyor");
         var zip = Path.Combine(work, Asset);
-        await using (var source = await Http.GetStreamAsync(release.ZipUrl))
-        await using (var target = File.Create(zip))
-            await source.CopyToAsync(target);
+        using (var response = await Http.GetAsync(release.ZipUrl, HttpCompletionOption.ResponseHeadersRead))
+        {
+            response.EnsureSuccessStatusCode();
+            var total = response.Content.Headers.ContentLength;
+            await using var source = await response.Content.ReadAsStreamAsync();
+            await using var target = File.Create(zip);
+            var buffer = new byte[81920];
+            long done = 0;
+            int read, percent = -1;
+            while ((read = await source.ReadAsync(buffer)) > 0)
+            {
+                await target.WriteAsync(buffer.AsMemory(0, read));
+                done += read;
+                // Once per whole percent, not per buffer.
+                if (total > 0 && (int)(done * 100 / total.Value) is var now && now != percent)
+                {
+                    percent = now;
+                    progress?.Invoke(now / 100.0);
+                    status($"Güncelleme indiriliyor %{now}");
+                }
+            }
+        }
 
+        status("Doğrulanıyor");
         var expected = (await Http.GetStringAsync(release.ShaUrl)).Split(' ', '\t', '\n')[0].Trim();
         string actual;
         await using (var file = File.OpenRead(zip))
@@ -92,6 +113,10 @@ internal static class Updater
             status("Açık araç bitince güncellenecek");
             await Task.Delay(1000);
         }
+
+        status("Yeniden başlatılıyor");
+        // The new version finds this and says the update went through.
+        try { File.WriteAllText(AppPaths.UpdatedFile, release.Version.ToString(3)); } catch (IOException) { }
 
         var app = AppContext.BaseDirectory.TrimEnd('\\');
         var backup = app + ".backup";

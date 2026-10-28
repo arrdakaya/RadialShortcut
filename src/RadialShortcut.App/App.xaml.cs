@@ -23,6 +23,8 @@ public partial class App : Application
     private RingCatalog _catalog = new([], 8);
     private readonly Dictionary<string, RingWindow> _rings = [];
     private RingWindow? _ring; // The ring of the current gesture.
+    private IntPtr _ringTarget; // The window under the gesture, kept for a switch to the file ring.
+    private string _ringLayer = RingLayers.Main;
     private FileSystemWatcher? _configWatcher;
     private DispatcherTimer? _reloadTimer;
     private HotkeyRing? _hotkey;
@@ -120,10 +122,31 @@ public partial class App : Application
         _hook.Start();
         WatchConfig();
         Welcome();
+        SayUpdated();
         Dispatcher.BeginInvoke(SelectedFiles.WarmUp, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
     }
 
     /// <summary>First launch: the app lives in the tray, so say how to reach it once.</summary>
+    /// <summary>The first start after an update says it went through; the file was left by the old version.</summary>
+    private void SayUpdated()
+    {
+        try
+        {
+            if (!File.Exists(AppPaths.UpdatedFile))
+                return;
+            var version = File.ReadAllText(AppPaths.UpdatedFile).Trim();
+            File.Delete(AppPaths.UpdatedFile);
+            // When the swap failed the old version starts again; then there is nothing to celebrate.
+            if (Version.TryParse(version, out var v) && v <= Updater.Current)
+                _tray?.ShowNotification("Güncellendi", $"RadialShortcut {Updater.Current.ToString(3)} kuruldu.");
+            else
+                _tray?.ShowNotification("Güncellenemedi", "Yeni sürüm kurulamadı, önceki sürüm açıldı. Tepsi menüsünden tekrar deneyebilirsin.");
+        }
+        catch (IOException)
+        {
+        }
+    }
+
     private void Welcome()
     {
         if (File.Exists(AppPaths.WelcomedFile))
@@ -232,11 +255,25 @@ public partial class App : Application
         {
             // The ring follows the window that was right-clicked, not the one with focus (PLAN.md, section 8).
             var target = Native.WindowAt(ev.Origin.X, ev.Origin.Y);
-            // Shift picks the other layer: over files selected in Explorer the file ring is the default.
-            // Checked here, on the UI thread, so the hook callback stays fast.
+            // Ctrl opens the app ring; Shift picks the other of main and files: over files selected in
+            // Explorer the file ring is the default. Checked here, on the UI thread, so the hook callback stays fast.
             var files = SelectedFiles.IsExplorer(target) && SelectedFiles.HasSelection(target);
-            var layer = files != Native.IsShiftDown() ? RingLayers.Files : RingLayers.Main;
-            _ring = RingFor(target, layer);
+            _ringLayer = Native.IsControlDown() ? RingLayers.Apps
+                : files != Native.IsShiftDown() ? RingLayers.Files : RingLayers.Main;
+            _ringTarget = target;
+            _ring = RingFor(target, _ringLayer);
+        }
+        else if (ev.Kind == GestureEventKind.RingMoved && _ring is not null && SwitchedLayer() is { } layer)
+        {
+            // Ctrl or Shift pressed after the ring opened still switches rings, at the same spot.
+            _ringLayer = layer;
+            var next = RingFor(_ringTarget, layer);
+            if (next != _ring)
+            {
+                _ring.Close(-1);
+                _ring = next;
+                _ring.Open(ev.Origin, IdleHint(layer));
+            }
         }
         if (_ring is null)
             return;
@@ -244,7 +281,7 @@ public partial class App : Application
         switch (ev.Kind)
         {
             case GestureEventKind.RingOpened:
-                _ring.Open(ev.Origin);
+                _ring.Open(ev.Origin, IdleHint(_ringLayer));
                 break;
             case GestureEventKind.RingMoved:
                 _ring.Track(ev.Point);
@@ -257,6 +294,24 @@ public partial class App : Application
                 break;
         }
     }
+
+    /// <summary>The layer a modifier pressed mid-gesture moves to: Ctrl from any ring to apps, Shift from main to files.</summary>
+    private string? SwitchedLayer()
+    {
+        if (_ringLayer != RingLayers.Apps && Native.IsControlDown())
+            return RingLayers.Apps;
+        if (_ringLayer == RingLayers.Main && Native.IsShiftDown())
+            return RingLayers.Files;
+        return null;
+    }
+
+    /// <summary>Under the title while nothing is hovered: the rings still reachable from this one.</summary>
+    private static string? IdleHint(string layer) => layer switch
+    {
+        RingLayers.Main => "Shift: dosya · Ctrl: uygulama",
+        RingLayers.Files => "Ctrl: uygulama",
+        _ => null,
+    };
 
     private RingWindow RingFor(IntPtr target, string layer)
     {
@@ -345,11 +400,19 @@ public partial class App : Application
         if (_installing)
             return "Güncelleme zaten kuruluyor.";
         _installing = true;
+        UpdateToast? toast = null;
         try
         {
             if (_update is null && !await CheckForUpdateAsync())
                 return "Kurulacak yeni sürüm bulunamadı.";
-            await Updater.InstallAsync(_update!, status);
+            toast = new UpdateToast(_update!.Version);
+            toast.Show();
+            await Updater.InstallAsync(_update, text =>
+            {
+                status(text);
+                toast.Status(text);
+            }, toast.Progress);
+            toast = null; // the app is shutting down and takes the card with it
             return null;
         }
         catch (Exception ex) when (ex is IOException or System.Net.Http.HttpRequestException or InvalidDataException or TaskCanceledException or UnauthorizedAccessException)
@@ -358,6 +421,8 @@ public partial class App : Application
         }
         finally
         {
+            // Any failure, caught here or not, must not leave "installing" on screen.
+            toast?.Close();
             _installing = false;
         }
     }

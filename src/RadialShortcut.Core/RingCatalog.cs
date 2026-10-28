@@ -53,7 +53,7 @@ public sealed class RingCatalog
             var layer = config.Layer?.Trim().ToLowerInvariant() ?? RingLayers.Main;
             if (!RingLayers.All.Contains(layer))
             {
-                warnings.Add($"{name}: \"{config.Layer}\" diye bir katman yok (main veya files), halka atlandı.");
+                warnings.Add($"{name}: \"{config.Layer}\" diye bir katman yok (main, files veya apps), halka atlandı.");
                 continue;
             }
 
@@ -90,6 +90,7 @@ public sealed class RingCatalog
         // Ids from the file are never empty or start with a control character, so these cannot clash.
         _globals.TryAdd(RingLayers.Main, new Ring("", DefaultRing.For(defaultSliceCount)));
         _globals.TryAdd(RingLayers.Files, new Ring("files", DefaultFileRing.Items));
+        _globals.TryAdd(RingLayers.Apps, new Ring("\u0001apps", DefaultAppRing.Slices().Select(s => ToItem(s, "", [])!).ToList()));
         Warnings = warnings;
     }
 
@@ -182,6 +183,8 @@ public sealed class RingCatalog
 
         var hint = slice.Hint ?? action.Type switch
         {
+            // Apps picked from the Start menu list launch by an app id, not a file name worth showing.
+            "launch" when action.Path!.StartsWith("shell:", StringComparison.OrdinalIgnoreCase) => "Uygulama",
             "launch" => Path.GetFileName(action.Path!),
             "url" => action.Url!,
             "hotkey" => action.Keys!,

@@ -60,7 +60,7 @@ public class RingCatalogTests
             ] }
             """);
         Assert.Equal(6, catalog.Warnings.Count);
-        Assert.Equal(2, catalog.All.Count()); // only the built-in main and file rings are left
+        Assert.Equal(3, catalog.All.Count()); // only the built-in main, file and app rings are left
     }
 
     [Fact]
@@ -70,7 +70,7 @@ public class RingCatalogTests
         var settings = UserSettings.Parse(File.ReadAllText(file));
         var catalog = new RingCatalog(settings.Rings, 8);
         Assert.Empty(catalog.Warnings);
-        Assert.Equal(5, catalog.All.Count());
+        Assert.Equal(6, catalog.All.Count());
         Assert.Equal("chrome-youtube", catalog.For("chrome.exe", "Müzik - YouTube").Id);
     }
 
@@ -80,6 +80,14 @@ public class RingCatalogTests
         var catalog = Catalog(Rings);
         Assert.Equal("convert", catalog.For("notepad.exe", "", RingLayers.Files).Items[0].Id);
         Assert.Equal("g", catalog.For("notepad.exe", "").Id);
+    }
+
+    [Fact]
+    public void AppLayerHasBuiltInLaunchSlices()
+    {
+        var items = Catalog(Rings).For("notepad.exe", "", RingLayers.Apps).Items;
+        Assert.Equal(DefaultAppRing.Slices().Count, items.Count);
+        Assert.All(items, i => Assert.Equal("launch", i.Action!.Type));
     }
 
     [Fact]

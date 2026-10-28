@@ -33,6 +33,7 @@ public sealed class RingWindow : Window
     private readonly List<Slice> _slices = [];
     private readonly TextBlock _title = new();
     private readonly TextBlock _hint = new();
+    private string? _idleHint;
     private readonly StackPanel _centerText = new();
     private readonly Color _accent2;
     private readonly Ellipse _centerRing = new();
@@ -123,10 +124,15 @@ public sealed class RingWindow : Window
     }
 
     /// <summary>Shows the ring centered on the press point, slid inside the monitor's work area if needed.</summary>
-    public void Open(ScreenPoint origin)
+    /// <param name="idleHint">Shown under the title while nothing is hovered, e.g. how to reach the other ring.</param>
+    public void Open(ScreenPoint origin, string? idleHint = null)
     {
         _origin = origin;
+        _idleHint = idleHint;
         SetHover(-1);
+        // SetHover skips the text when nothing was hovered before, so the idle hint is set here too.
+        _title.Text = "Genel";
+        _hint.Text = idleHint ?? "Bırak: iptal";
         foreach (var e in new UIElement[] { _indicator, _centerRing })
         {
             e.BeginAnimation(OpacityProperty, null);
@@ -302,7 +308,7 @@ public sealed class RingWindow : Window
 
         var item = _hover >= 0 ? _items[_hover] : null;
         _title.Text = item?.Title ?? "Genel";
-        _hint.Text = item?.Hint ?? "Bırak: iptal";
+        _hint.Text = item?.Hint ?? _idleHint ?? "Bırak: iptal";
         _centerText.BeginAnimation(OpacityProperty, new DoubleAnimation(0.3, 1, TimeSpan.FromMilliseconds(140))
         {
             EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },

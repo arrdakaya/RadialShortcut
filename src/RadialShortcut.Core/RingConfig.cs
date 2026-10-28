@@ -6,7 +6,7 @@ public sealed class RingConfig
     public string Id { get; set; } = "";
     public string? Name { get; set; }
 
-    /// <summary>"main" (default, plain right-hold) or "files" (Shift + right-hold); each layer has its own global ring.</summary>
+    /// <summary>"main" (default, plain right-hold) or "files" (Shift + right-hold) or "apps" (Ctrl + right-hold); each layer has its own global ring.</summary>
     public string? Layer { get; set; }
     public RingMatch? Match { get; set; }
     public List<SliceConfig> Slices { get; set; } = [];

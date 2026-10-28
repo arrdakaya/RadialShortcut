@@ -47,10 +47,28 @@ public static class DefaultFileRing
     ];
 }
 
+/// <summary>The third layer, opened with Ctrl + right-hold: a few apps every Windows has, as a starting point to edit.</summary>
+public static class DefaultAppRing
+{
+    /// <summary>Clockwise from the top; a fresh list each call, so the settings window can edit it.</summary>
+    public static List<SliceConfig> Slices() =>
+    [
+        Launch("Dosyalar", "explorer.exe"),
+        Launch("Not Defteri", "notepad.exe"),
+        Launch("Hesap Mak.", "calc.exe"),
+        Launch("Paint", "mspaint.exe"),
+        Launch("Terminal", "wt.exe"),
+        Launch("Görev Yön.", "taskmgr.exe"),
+    ];
+
+    private static SliceConfig Launch(string label, string path) =>
+        new() { Label = label, Action = new SliceAction { Type = "launch", Path = path } };
+}
+
 public static class RingLayers
 {
-    public const string Main = "main", Files = "files";
+    public const string Main = "main", Files = "files", Apps = "apps";
 
-    public static IReadOnlyList<string> All { get; } = [Main, Files];
+    public static IReadOnlyList<string> All { get; } = [Main, Files, Apps];
 }
 

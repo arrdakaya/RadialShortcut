@@ -18,7 +18,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <AssemblyName>RadialShortcut</AssemblyName>
-    <Version>0.8.5</Version>
+    <Version>0.8.6</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets/app.ico</ApplicationIcon>
     <!-- A tray app that idles almost all day: no background GC thread, and hand memory back eagerly. -->

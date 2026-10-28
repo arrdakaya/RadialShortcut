@@ -69,6 +69,7 @@ internal static class Native
     public static bool IsKeyDown(int vk) => (GetAsyncKeyState(vk) & 0x8000) != 0;
 
     public static bool IsShiftDown() => IsKeyDown(VK_SHIFT);
+    public static bool IsControlDown() => IsKeyDown(VK_CONTROL);
 
     public static string ClassName(IntPtr hwnd)
     {

@@ -24,6 +24,11 @@ internal static class AppIcons
             return cached;
 
         ImageSource? image = null;
+        if (path.StartsWith("shell:", StringComparison.OrdinalIgnoreCase))
+        {
+            Cache[path] = image = ShellItemIcon(path);
+            return image;
+        }
         var full = Resolve(path);
         if (full is not null)
         {
@@ -69,6 +74,93 @@ internal static class AppIcons
         }
         return null;
     }
+
+    /// <summary>
+    /// Icons for shell names like "shell:AppsFolder\…" (Store apps have no file to ask SHGetFileInfo about).
+    /// The bitmap comes back as a premultiplied DIB, copied by hand so its transparency survives.
+    /// </summary>
+    private static ImageSource? ShellItemIcon(string name)
+    {
+        var iid = typeof(IShellItemImageFactory).GUID;
+        if (SHCreateItemFromParsingName(name, IntPtr.Zero, ref iid, out var factory) != 0 || factory is null)
+            return null;
+        try
+        {
+            if (factory.GetImage(new SIZE { cx = 32, cy = 32 }, SIIGBF_ICONONLY, out var bitmap) != 0)
+                return null;
+            try
+            {
+                var dib = new DIBSECTION();
+                if (GetObject(bitmap, Marshal.SizeOf<DIBSECTION>(), ref dib) == 0 || dib.dsBm.bmBits == IntPtr.Zero || dib.dsBm.bmBitsPixel != 32)
+                    return null;
+                int width = dib.dsBm.bmWidth, height = dib.dsBm.bmHeight, stride = dib.dsBm.bmWidthBytes;
+                BitmapSource source = BitmapSource.Create(width, height, 96, 96, PixelFormats.Pbgra32, null, dib.dsBm.bmBits, stride * height, stride);
+                // A positive height means the rows are stored bottom-up.
+                if (dib.dsBmih.biHeight > 0)
+                    source = new TransformedBitmap(source, new ScaleTransform(1, -1));
+                source.Freeze();
+                return source;
+            }
+            finally
+            {
+                DeleteObject(bitmap);
+            }
+        }
+        finally
+        {
+            Marshal.ReleaseComObject(factory);
+        }
+    }
+
+    private const int SIIGBF_ICONONLY = 0x4;
+
+    [ComImport, Guid("bcc18b79-ba16-442f-80c4-8a59c30c463b"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IShellItemImageFactory
+    {
+        [PreserveSig]
+        int GetImage(SIZE size, int flags, out IntPtr bitmap);
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct SIZE
+    {
+        public int cx, cy;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct BITMAP
+    {
+        public int bmType, bmWidth, bmHeight, bmWidthBytes;
+        public ushort bmPlanes, bmBitsPixel;
+        public IntPtr bmBits;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct BITMAPINFOHEADER
+    {
+        public int biSize, biWidth, biHeight;
+        public ushort biPlanes, biBitCount;
+        public int biCompression, biSizeImage, biXPelsPerMeter, biYPelsPerMeter, biClrUsed, biClrImportant;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct DIBSECTION
+    {
+        public BITMAP dsBm;
+        public BITMAPINFOHEADER dsBmih;
+        public int dsBitfield0, dsBitfield1, dsBitfield2;
+        public IntPtr dshSection;
+        public int dsOffset;
+    }
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    private static extern int SHCreateItemFromParsingName(string path, IntPtr bindContext, ref Guid iid, [MarshalAs(UnmanagedType.Interface)] out IShellItemImageFactory? factory);
+
+    [DllImport("gdi32.dll")]
+    private static extern int GetObject(IntPtr handle, int size, ref DIBSECTION dib);
+
+    [DllImport("gdi32.dll")]
+    private static extern bool DeleteObject(IntPtr handle);
 
     private const uint SHGFI_ICON = 0x100, SHGFI_LARGEICON = 0x0;
 

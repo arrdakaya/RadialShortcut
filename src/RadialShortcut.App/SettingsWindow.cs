@@ -110,7 +110,8 @@ internal sealed class SettingsWindow : Window
     private readonly DispatcherTimer _previewTimer = new() { Interval = TimeSpan.FromMilliseconds(140) };
 
     private readonly Input _ringName = new("Halkanın adı");
-    private readonly Segmented _ringLayer = new("Sağ tuş", "Shift + sağ tuş");
+    private readonly Segmented _ringLayer = new("Sağ tuş", "Shift ile", "Ctrl ile");
+    private static readonly string[] LayerOrder = [RingLayers.Main, RingLayers.Files, RingLayers.Apps];
     private readonly Segmented _ringWhere = new("Her yerde", "Belirli uygulamada");
     private readonly StackPanel _matchPanel = new();
     private readonly Input _ringProcess = new("örn. chrome");
@@ -130,6 +131,8 @@ internal sealed class SettingsWindow : Window
     private readonly Input _sliceValue = new("");
     private readonly ChordBox _sliceChord = new(minKeys: 1);
     private readonly Pill _browse;
+    private readonly Pill _pickApp;
+    private List<InstalledApp>? _installedApps; // Read once, the first time the picker opens.
     private readonly Pill _install;
     private readonly StackPanel _valuePanel = new();
     private readonly TextBlock _sliceProblem = new() { Foreground = Danger, FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) };
@@ -160,6 +163,7 @@ internal sealed class SettingsWindow : Window
         _settings = settings.Clone();
         AddBuiltInRings();
         _browse = TextButton("Gözat…", Browse, Kind.Secondary);
+        _pickApp = TextButton("Uygulamalardan seç…", PickApp, Kind.Secondary);
 
         Title = "RadialShortcut Ayarları";
         Width = Math.Min(1300, SystemParameters.WorkArea.Width - 40);
@@ -240,6 +244,8 @@ internal sealed class SettingsWindow : Window
     private void AddBuiltInRings()
     {
         bool HasGlobal(string layer) => _settings.Rings.Any(r => r.Match is null && LayerOf(r) == layer);
+        if (!HasGlobal(RingLayers.Apps))
+            _settings.Rings.Insert(0, new RingConfig { Id = NewId("uygulama"), Name = "Uygulamalar", Layer = RingLayers.Apps, Slices = DefaultAppRing.Slices() });
         if (!HasGlobal(RingLayers.Files))
             _settings.Rings.Insert(0, new RingConfig { Id = NewId("dosya"), Name = "Dosya", Layer = RingLayers.Files, Slices = DefaultFileRing.Items.Select(i => new SliceConfig { Tool = i.Id }).ToList() });
         if (!HasGlobal(RingLayers.Main))
@@ -375,6 +381,7 @@ internal sealed class SettingsWindow : Window
         page.Children.Add(Section("Halkayı açma",
             Row("Sağ tuş", "Sağ tuşu basılı tut, fareyi bir dilime doğru çek, bırak.", Keycaps("Sağ tuş")),
             Row("Dosya halkası", "Explorer'da dosya seçiliyken kendiliğinden açılır; başka yerde Shift ile.", Keycaps("Shift", "Sağ tuş")),
+            Row("Uygulama halkası", "Sık açtığın uygulamalar. Halka açıkken Ctrl'e basınca da geçer.", Keycaps("Ctrl", "Sağ tuş")),
             Row("Klavye kısayolu", "Touchpad için. Basılı tut, imleçle dilime git, bırak. Shift eklersen dosya halkası açılır. Değiştirmek için kutuya tıkla.", _ringHotkey)));
 
         page.Children.Add(Section("Görünüm",
@@ -807,7 +814,7 @@ internal sealed class SettingsWindow : Window
         panel.Children.Add(actions);
 
         _ringName.Box.TextChanged += (_, _) => EditRing(r => r.Name = _ringName.Text.Trim().Length == 0 ? null : _ringName.Text);
-        _ringLayer.Changed += i => EditRing(r => r.Layer = i == 1 ? RingLayers.Files : null);
+        _ringLayer.Changed += i => EditRing(r => r.Layer = i == 0 ? null : LayerOrder[i]);
         _ringWhere.Changed += i =>
         {
             _matchPanel.Visibility = i == 1 ? Visibility.Visible : Visibility.Collapsed;
@@ -902,6 +909,9 @@ internal sealed class SettingsWindow : Window
         valueRow.Children.Add(_sliceValue);
         _valuePanel.Children.Add(_valueCaption);
         _valuePanel.Children.Add(valueRow);
+        _pickApp.Margin = new Thickness(0, 6, 0, 0);
+        _pickApp.HorizontalAlignment = HorizontalAlignment.Left;
+        _valuePanel.Children.Add(_pickApp);
         _valuePanel.Children.Add(_sliceChord);
         _sliceEditor.Children.Add(_valuePanel);
         _sliceEditor.Children.Add(_sliceProblem);
@@ -919,7 +929,7 @@ internal sealed class SettingsWindow : Window
     private void RefreshRingCards()
     {
         _ringCards.Children.Clear();
-        foreach (var (layer, title) in new[] { (RingLayers.Main, "Sağ tuş"), (RingLayers.Files, "Shift + sağ tuş") })
+        foreach (var (layer, title) in new[] { (RingLayers.Main, "Sağ tuş"), (RingLayers.Files, "Shift + sağ tuş"), (RingLayers.Apps, "Ctrl + sağ tuş") })
         {
             _ringCards.Children.Add(new TextBlock { Text = title, Foreground = Palette.Muted, FontSize = 11, FontWeight = FontWeights.SemiBold, Margin = new Thickness(8, 10, 0, 6) });
             var rings = _settings.Rings.Select((r, i) => (Ring: r, Index: i)).Where(x => LayerOf(x.Ring) == layer).OrderBy(x => x.Ring.Match is null ? 0 : 1).ToList();
@@ -972,7 +982,7 @@ internal sealed class SettingsWindow : Window
         }
         _loading = true;
         _ringName.Text = ring.Name ?? "";
-        _ringLayer.Select(LayerOf(ring) == RingLayers.Files ? 1 : 0);
+        _ringLayer.Select(Math.Max(0, Array.IndexOf(LayerOrder, LayerOf(ring))));
         _ringWhere.Select(ring.Match is null ? 0 : 1);
         _matchPanel.Visibility = ring.Match is null ? Visibility.Collapsed : Visibility.Visible;
         _ringProcess.Text = ring.Match?.Process ?? "";
@@ -986,7 +996,12 @@ internal sealed class SettingsWindow : Window
         if (Ring is not { } ring)
             return;
         _ringHeader.Text = DisplayName(ring);
-        var how = LayerOf(ring) == RingLayers.Files ? "Shift + sağ tuşu basılı tut" : "Sağ tuşu basılı tut";
+        var how = LayerOf(ring) switch
+        {
+            RingLayers.Files => "Shift + sağ tuşu basılı tut",
+            RingLayers.Apps => "Ctrl + sağ tuşu basılı tut",
+            _ => "Sağ tuşu basılı tut",
+        };
         _ringSubheader.Text = ring.Match is null
             ? $"{how}. Başka halka eşleşmeyince her yerde bu açılır."
             : $"{how}. Sadece {Where(ring)} penceresinde açılır.";
@@ -1048,8 +1063,12 @@ internal sealed class SettingsWindow : Window
             return;
         if (MessageBox.Show(this, $"\"{DisplayName(ring)}\" halkasının dilimleri yerleşik dilimlerle değiştirilsin mi?", "Varsayılana döndür", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK)
             return;
-        var defaults = LayerOf(ring) == RingLayers.Files ? DefaultFileRing.Items : DefaultRing.For(8);
-        ring.Slices = defaults.Select(i => new SliceConfig { Tool = i.Id }).ToList();
+        ring.Slices = LayerOf(ring) switch
+        {
+            RingLayers.Files => DefaultFileRing.Items.Select(i => new SliceConfig { Tool = i.Id }).ToList(),
+            RingLayers.Apps => DefaultAppRing.Slices(),
+            _ => DefaultRing.For(8).Select(i => new SliceConfig { Tool = i.Id }).ToList(),
+        };
         SelectRing(_ringIndex);
         MarkDirty();
     }
@@ -1143,7 +1162,7 @@ internal sealed class SettingsWindow : Window
         _valuePanel.Visibility = type == "tool" ? Visibility.Collapsed : Visibility.Visible;
         _sliceChord.Visibility = type == "hotkey" ? Visibility.Visible : Visibility.Collapsed;
         ((FrameworkElement)_sliceValue.Parent).Visibility = type == "hotkey" ? Visibility.Collapsed : Visibility.Visible;
-        _browse.Visibility = type == "launch" ? Visibility.Visible : Visibility.Collapsed;
+        _browse.Visibility = _pickApp.Visibility = type == "launch" ? Visibility.Visible : Visibility.Collapsed;
         _sliceValue.Multiline = type == "text";
         (_valueCaption.Text, _sliceValue.Placeholder) = type switch
         {
@@ -1235,6 +1254,151 @@ internal sealed class SettingsWindow : Window
         };
         if (dialog.ShowDialog(this) == true)
             _sliceValue.Text = dialog.FileName;
+    }
+
+    /// <summary>A searchable list of the Start menu's apps; picking one fills the path, and the label if it is empty.</summary>
+    private void PickApp()
+    {
+        if (_installedApps is null)
+        {
+            Mouse.OverrideCursor = Cursors.Wait;
+            try
+            {
+                _installedApps = InstalledApps.Load();
+            }
+            finally
+            {
+                Mouse.OverrideCursor = null;
+            }
+        }
+        if (_installedApps.Count == 0)
+        {
+            _installedApps = null; // try again next time rather than keep the failure
+            Say("Uygulama listesi okunamadı. Gözat ile dosyayı seçebilirsin.", problem: true);
+            return;
+        }
+
+        var search = new Input("Ara…");
+        var list = new ListBox
+        {
+            Background = Brushes.Transparent,
+            Foreground = Palette.Text,
+            BorderThickness = new Thickness(0),
+            Margin = new Thickness(0, 8, 0, 0),
+        };
+        ScrollViewer.SetHorizontalScrollBarVisibility(list, ScrollBarVisibility.Disabled);
+        VirtualizingPanel.SetIsVirtualizing(list, true);
+        list.ItemTemplate = AppRowTemplate();
+
+        var dialog = new Window
+        {
+            Title = "Uygulama seç",
+            Owner = this,
+            Width = 380,
+            Height = 520,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+            ResizeMode = ResizeMode.NoResize,
+            Background = Palette.Surface,
+        };
+        var root = new DockPanel { Margin = new Thickness(14) };
+        DockPanel.SetDock(search, Dock.Top);
+        root.Children.Add(search);
+        root.Children.Add(list);
+        dialog.Content = root;
+        dialog.SourceInitialized += (_, _) =>
+        {
+            if (!Palette.IsDark)
+                return;
+            var on = 1;
+            DwmSetWindowAttribute(new WindowInteropHelper(dialog).Handle, 20, ref on, sizeof(int));
+        };
+
+        void Filter()
+        {
+            var words = search.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            list.ItemsSource = _installedApps.Where(a => words.All(w => a.Name.Contains(w, StringComparison.CurrentCultureIgnoreCase))).ToList();
+            if (list.Items.Count > 0)
+                list.SelectedIndex = 0;
+        }
+        InstalledApp? chosen = null;
+        void Choose()
+        {
+            if (list.SelectedItem is not InstalledApp app)
+                return;
+            chosen = app;
+            dialog.Close();
+        }
+        search.Box.TextChanged += (_, _) => Filter();
+        search.Box.PreviewKeyDown += (_, e) =>
+        {
+            switch (e.Key)
+            {
+                case Key.Down when list.SelectedIndex < list.Items.Count - 1:
+                    list.SelectedIndex++;
+                    list.ScrollIntoView(list.SelectedItem);
+                    e.Handled = true;
+                    break;
+                case Key.Up when list.SelectedIndex > 0:
+                    list.SelectedIndex--;
+                    list.ScrollIntoView(list.SelectedItem);
+                    e.Handled = true;
+                    break;
+                case Key.Enter:
+                    Choose();
+                    e.Handled = true;
+                    break;
+            }
+        };
+        list.MouseDoubleClick += (_, _) => Choose();
+        list.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter)
+                Choose();
+        };
+        dialog.PreviewKeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Escape)
+                dialog.Close();
+        };
+        dialog.Loaded += (_, _) => search.Box.Focus();
+        Filter();
+        dialog.ShowDialog();
+
+        if (chosen is null || Slice is not { } slice)
+            return;
+        if (string.IsNullOrWhiteSpace(slice.Label))
+        {
+            EditSlice(s => s.Label = chosen.Name);
+            FillSlice();
+        }
+        _sliceValue.Text = chosen.Path;
+    }
+
+    /// <summary>Icon and name; the icon loads when the row is first drawn, since the list can be long.</summary>
+    private static DataTemplate AppRowTemplate()
+    {
+        var row = new FrameworkElementFactory(typeof(StackPanel));
+        row.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
+        row.SetValue(MarginProperty, new Thickness(2, 3, 2, 3));
+        var icon = new FrameworkElementFactory(typeof(Image));
+        icon.SetValue(WidthProperty, 20.0);
+        icon.SetValue(HeightProperty, 20.0);
+        icon.SetValue(MarginProperty, new Thickness(0, 0, 10, 0));
+        icon.SetBinding(Image.SourceProperty, new System.Windows.Data.Binding(nameof(InstalledApp.Path)) { Converter = new AppIconConverter(), IsAsync = false });
+        var name = new FrameworkElementFactory(typeof(TextBlock));
+        name.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding(nameof(InstalledApp.Name)));
+        name.SetValue(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center);
+        name.SetValue(TextBlock.TextTrimmingProperty, TextTrimming.CharacterEllipsis);
+        row.AppendChild(icon);
+        row.AppendChild(name);
+        return new DataTemplate { VisualTree = row };
+    }
+
+    private sealed class AppIconConverter : System.Windows.Data.IValueConverter
+    {
+        public object? Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture) => AppIcons.For(value as string);
+        public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture) => throw new NotSupportedException();
     }
 
     private void AddSlice()
