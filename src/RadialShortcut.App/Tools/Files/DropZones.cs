@@ -45,6 +45,8 @@ internal sealed class DropZones : Window
     private DropZones(ScreenPoint origin)
     {
         _origin = origin;
+        Title = "RadialShortcut bırakma alanı";
+        AllowDrop = true;
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
         Background = Brushes.Transparent;
