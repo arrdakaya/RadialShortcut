@@ -5,6 +5,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
+using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 using RadialShortcut.Core;
 using RadialShortcut.Input;
@@ -110,7 +111,27 @@ public sealed class RingWindow : Window
             e.Opacity = 0;
         }
         PlaceAt(origin);
+        Appear();
+    }
 
+    /// <summary>
+    /// The ring as it looks once open with a slice hovered, drawn off screen (for README images):
+    /// the open animation runs in place, then the settled ring is rendered at twice its size.
+    /// </summary>
+    public async Task<BitmapSource> SnapshotAsync(int hover)
+    {
+        SetHover(-1);
+        Appear();
+        await Task.Delay(Math.Max(_style.OpenAnimationMs, 1) + 600);
+        SetHover(hover);
+        await Task.Delay(500);
+        var bitmap = new RenderTargetBitmap((int)(_style.Size * 2), (int)(_style.Size * 2), 192, 192, PixelFormats.Pbgra32);
+        bitmap.Render(_root);
+        return bitmap;
+    }
+
+    private void Appear()
+    {
         var ms = Math.Max(_style.OpenAnimationMs, 1);
         var spring = new BackEase { Amplitude = 0.45, EasingMode = EasingMode.EaseOut };
         _root.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(ms * 0.5))
@@ -500,12 +521,12 @@ public sealed class RingWindow : Window
         return geometry;
     }
 
-    private static Color WithAlpha(Color c, byte a) => Color.FromArgb(a, c.R, c.G, c.B);
+    internal static Color WithAlpha(Color c, byte a) => Color.FromArgb(a, c.R, c.G, c.B);
 
-    private static Color Lighten(Color c, double t) =>
+    internal static Color Lighten(Color c, double t) =>
         Color.FromRgb((byte)(c.R + (255 - c.R) * t), (byte)(c.G + (255 - c.G) * t), (byte)(c.B + (255 - c.B) * t));
 
-    private static Color HueShift(Color c, double degrees)
+    internal static Color HueShift(Color c, double degrees)
     {
         double r = c.R / 255.0, g = c.G / 255.0, b = c.B / 255.0;
         double max = Math.Max(r, Math.Max(g, b)), min = Math.Min(r, Math.Min(g, b)), d = max - min;

@@ -32,6 +32,18 @@ public partial class App : Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        if (e.Args is ["--snapshot", var folder])
+        {
+            // Draws the README images and exits; no tray, hook or single-instance lock.
+            base.OnStartup(e);
+            Dispatcher.InvokeAsync(async () =>
+            {
+                await Snapshots.WriteAsync(folder);
+                Shutdown();
+            });
+            return;
+        }
+
         _singleInstance = new Mutex(initiallyOwned: true, MutexName, out var createdNew);
         if (!createdNew)
         {
