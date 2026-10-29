@@ -24,7 +24,8 @@ internal sealed class TrimWindow : Window
     private readonly TextBlock _info = new() { Foreground = Palette.Muted, FontSize = 12, VerticalAlignment = VerticalAlignment.Center };
     private readonly DispatcherTimer _tick = new() { Interval = TimeSpan.FromMilliseconds(100) };
     private TimeSpan _length, _in, _out;
-    private bool _playing, _dragging;
+    private bool _playing, _dragging, _resumeAfterDrag, _syncing;
+    private double? _scrubTo;
 
     public static async Task RunAsync(IntPtr target, Int32Rect anchor)
     {
@@ -86,24 +87,58 @@ internal sealed class TrimWindow : Window
         _player.Source = new Uri(file);
         _player.Play();
 
-        _position.AddHandler(Thumb.DragStartedEvent, new RoutedEventHandler((_, _) => _dragging = true));
-        _position.AddHandler(Thumb.DragCompletedEvent, new RoutedEventHandler((_, _) => { _dragging = false; Seek(_position.Value); }));
+        // While the thumb is dragged the video pauses and follows it frame by frame; the seeks are
+        // coalesced on the render loop so a fast drag doesn't queue up dozens of them.
+        _position.AddHandler(Thumb.DragStartedEvent, new RoutedEventHandler((_, _) =>
+        {
+            _dragging = true;
+            _resumeAfterDrag = _playing;
+            if (_playing)
+            {
+                _player.Pause();
+                _playing = false;
+            }
+        }));
+        _position.AddHandler(Thumb.DragCompletedEvent, new RoutedEventHandler((_, _) =>
+        {
+            _dragging = false;
+            _scrubTo = null;
+            Seek(_position.Value);
+            if (_resumeAfterDrag)
+            {
+                _player.Play();
+                _playing = true;
+            }
+        }));
         _position.ValueChanged += (_, e) =>
         {
-            if (Math.Abs(e.NewValue - _player.Position.TotalSeconds) > 0.25)
+            if (_syncing)
+                return;
+            if (_dragging)
+            {
+                _scrubTo = e.NewValue;
+                Update();
+            }
+            else
                 Seek(e.NewValue);
         };
+        CompositionTarget.Rendering += Scrub;
         _range.SizeChanged += (_, _) => Update();
         _tick.Tick += (_, _) =>
         {
             if (!_dragging)
+            {
+                _syncing = true;
                 _position.Value = _player.Position.TotalSeconds;
+                _syncing = false;
+            }
             Update();
         };
         _tick.Start();
         Closed += (_, _) =>
         {
             _tick.Stop();
+            CompositionTarget.Rendering -= Scrub;
             _player.Close();
         };
         PreviewKeyDown += OnKey;
@@ -148,8 +183,18 @@ internal sealed class TrimWindow : Window
     private void Seek(double seconds)
     {
         _player.Position = TimeSpan.FromSeconds(Math.Clamp(seconds, 0, _length.TotalSeconds));
+        _syncing = true;
         _position.Value = _player.Position.TotalSeconds;
+        _syncing = false;
         Update();
+    }
+
+    private void Scrub(object? sender, EventArgs e)
+    {
+        if (_scrubTo is not { } target)
+            return;
+        _scrubTo = null;
+        _player.Position = TimeSpan.FromSeconds(Math.Clamp(target, 0, _length.TotalSeconds));
     }
 
     private void MarkIn()
@@ -175,7 +220,8 @@ internal sealed class TrimWindow : Window
         var w = _range.ActualWidth;
         Canvas.SetLeft(_selected, w * _in.TotalSeconds / _length.TotalSeconds);
         _selected.Width = Math.Max(1, w * (_out - _in).TotalSeconds / _length.TotalSeconds);
-        _info.Text = $"{Format(_player.Position)} / {Format(_length)}   ·   seçim {Format(_in)} – {Format(_out)} ({Format(_out - _in)})   ·   Space oynat, ← → sar";
+        var now = _dragging ? TimeSpan.FromSeconds(_position.Value) : _player.Position;
+        _info.Text = $"{Format(now)} / {Format(_length)}   ·   seçim {Format(_in)} – {Format(_out)} ({Format(_out - _in)})   ·   Space oynat, ← → sar";
     }
 
     private static string Format(TimeSpan t) => t.TotalHours >= 1 ? t.ToString(@"h\:mm\:ss\.f") : t.ToString(@"mm\:ss\.f");
