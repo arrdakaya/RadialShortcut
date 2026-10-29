@@ -41,7 +41,7 @@ A plain right-click still works as usual.
 
 **Screen ring:** text from screen (OCR) · color picker · translate · screenshot · scrolling capture · screen recording · Google Lens · pin to screen
 
-**File ring:** convert · compress · resize · trim video · annotate · download from link · library · remove background
+**File ring:** convert · compress · resize · trim video · annotate · download from link · library · remove background · unlock (close whatever holds a file)
 
 Everything runs on your machine: OCR uses Windows' built-in engine and background removal uses a local model.
 

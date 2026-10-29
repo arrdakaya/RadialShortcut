@@ -20,7 +20,7 @@ internal sealed class DropZones : Window
     private static DropZones? _open;
 
     // Tools that work on files; download and library have no input to drop.
-    private static readonly string[] ToolIds = ["convert", "compress", "resize", "trim", "annotate", "nobg"];
+    private static readonly string[] ToolIds = ["convert", "compress", "resize", "trim", "annotate", "nobg", "unlock"];
 
     // The ring's look: its accent pair, slice fill, hairline edge and label colors.
     private static readonly Color Accent = (Color)ColorConverter.ConvertFromString(new RingStyle().Accent);

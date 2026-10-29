@@ -45,10 +45,11 @@ internal static class FileDrag
         note?.Invoke($"Sürükleme: {(onItem ? "dosya" : "dosya değil")}");
         if (!onItem || drag != _drag)
             return;
-        // What is being dragged picks the tiles. An Explorer window says so directly; the desktop can only
-        // be read by copying, which would break the drag, so there every tile shows.
+        // What is being dragged picks the tiles; when it cannot be read every tile shows.
         var source = Native.WindowAt(start.X, start.Y);
-        _files = SelectedFiles.IsExplorer(source) ? SelectedFiles.InExplorer(source) : [];
+        _files = SelectedFiles.IsExplorer(source) ? SelectedFiles.InExplorer(source)
+            : SelectedFiles.IsDesktop(source) ? SelectedFiles.OnDesktopView()
+            : [];
         if (_files.Count > 0 && !DropZones.AnyFor(_files))
             return;
 
@@ -89,6 +90,10 @@ internal static class FileDrag
     /// <summary>True when the point is on a file or folder in an Explorer view or on the desktop.</summary>
     private static bool IsItemAt(ScreenPoint at)
     {
+        // The desktop's icon list shows no items to UI Automation on some setups, so ask the list itself.
+        var list = Native.ChildWindowAt(at.X, at.Y);
+        if (Native.ClassName(list) == "SysListView32")
+            return Native.ListViewItemAt(list, at.X, at.Y);
         try
         {
             var element = AutomationElement.FromPoint(new Point(at.X, at.Y));

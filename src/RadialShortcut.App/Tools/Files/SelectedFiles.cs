@@ -23,6 +23,32 @@ internal static class SelectedFiles
     public static List<string> InExplorer(IntPtr hwnd) => Read(hwnd, countOnly: false).Paths;
 
     /// <summary>
+    /// The desktop's selection without touching the clipboard, so it can be read mid-drag. The Shell
+    /// hands out the desktop's view by asking for it as the desktop (SWC_DESKTOP).
+    /// </summary>
+    public static List<string> OnDesktopView()
+    {
+        var paths = new List<string>();
+        try
+        {
+            dynamic shell = _shell ??= Activator.CreateInstance(Type.GetTypeFromProgID("Shell.Application")!)!;
+            object location = 0, root = 0;
+            dynamic desktop = shell.Windows().FindWindowSW(ref location, ref root, 8 /* SWC_DESKTOP */, out int _, 1 /* SWFO_NEEDDISPATCH */);
+            foreach (dynamic item in desktop.Document.SelectedItems())
+            {
+                string path = item.Path;
+                if (File.Exists(path))
+                    paths.Add(path);
+            }
+        }
+        catch (Exception e) when (e is System.Runtime.InteropServices.COMException or Microsoft.CSharp.RuntimeBinder.RuntimeBinderException)
+        {
+            // No desktop view (Explorer restarting): the strip then shows every tile.
+        }
+        return paths;
+    }
+
+    /// <summary>
     /// Whether files (not just folders) are selected. Asked on every ring open, so it runs on its own
     /// thread and gives up after a short wait: a busy or hung Explorer then opens the main ring
     /// instead of holding the ring back.

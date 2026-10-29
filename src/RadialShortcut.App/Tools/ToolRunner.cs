@@ -102,6 +102,9 @@ public static class ToolRunner
                 case "nobg":
                     await BackgroundRemover.RunAsync(target, anchor);
                     break;
+                case "unlock":
+                    await FileUnlocker.RunAsync(target, anchor);
+                    break;
                 case "action" when item.Action is { } action:
                     await ActionRunner.RunAsync(action, target);
                     break;

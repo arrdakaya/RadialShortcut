@@ -44,6 +44,7 @@ public static class DefaultFileRing
         new("download", "İndir", "Linkten indir", "Panodaki link", "M12 4v11 M7 10l5 5 5-5 M5 20h14"),
         new("library", "Geçmiş", "Kütüphane", "Ara · Ctrl+F", "M4 5h16 M4 10h16 M4 15h10 M17 15a2.5 2.5 0 1 0 0 5a2.5 2.5 0 1 0 0-5 M19 19.5l1.5 1.5"),
         new("nobg", "Arka plan", "Arka planı sil", "Şeffaf PNG", "M4 4h4 M10 4h4 M16 4h4 M4 20h4 M10 20h4 M16 20h4 M4 10v4 M20 10v4 M12 7a3 3 0 1 0 0 6a3 3 0 1 0 0-6 M7 17c1-2.5 3-3.5 5-3.5s4 1 5 3.5"),
+        new("unlock", "Kilit aç", "Kilidi aç", "Dosyayı tutanı kapat", "M6 11h12v9H6z M9 11V7a3 3 0 0 1 6 0 M12 14.5v2"),
     ];
 }
 

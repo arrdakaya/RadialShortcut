@@ -19,6 +19,7 @@ internal static class FileJobs
         badge.Show();
 
         var outputs = new List<string>();
+        var sources = new Dictionary<string, string>();
         _extra = [];
         var failures = new List<string>();
         try
@@ -34,6 +35,7 @@ internal static class FileJobs
                     if (output is not null)
                     {
                         outputs.Add(output);
+                        sources[output] = input;
                         ToolRunner.Remember(tool, output);
                     }
                 }
@@ -62,8 +64,15 @@ internal static class FileJobs
             1 => $"{verb}: hazır",
             var n => $"{verb}: {n} dosya hazır",
         };
-        var lines = outputs.Take(4).Select(o => $"{Path.GetFileName(o)} · {MediaKinds.Size(new FileInfo(o).Length)}")
+        // Compress and resize are about size, so their card compares with the original.
+        var compare = tool is "compress" or "resize" && outputs.All(o => File.Exists(sources[o]));
+        var lines = outputs.Take(4).Select(o => compare ? $"{Path.GetFileName(o)} · {SizeChange(sources[o], o)}" : $"{Path.GetFileName(o)} · {MediaKinds.Size(new FileInfo(o).Length)}")
             .Concat(failures.Take(3));
+        if (compare && outputs.Count > 1)
+        {
+            long before = outputs.Sum(o => new FileInfo(sources[o]).Length), after = outputs.Sum(o => new FileInfo(o).Length);
+            lines = lines.Append($"Toplam: {MediaKinds.Size(before)} → {MediaKinds.Size(after)}{Percent(before, after)}");
+        }
         if (cancel.IsCancellationRequested)
             lines = lines.Append("Durduruldu.");
 
@@ -78,6 +87,16 @@ internal static class FileJobs
         }
         card.WithButton("Tamam", () => { }, primary: true).ShowNear();
     }
+
+    /// <summary>"69,5 MB → 18,2 MB (−%74)".</summary>
+    private static string SizeChange(string input, string output)
+    {
+        long before = new FileInfo(input).Length, after = new FileInfo(output).Length;
+        return $"{MediaKinds.Size(before)} → {MediaKinds.Size(after)}{Percent(before, after)}";
+    }
+
+    private static string Percent(long before, long after) =>
+        before <= 0 ? "" : after <= before ? $" (−%{100 - 100.0 * after / before:0})" : $" (+%{100.0 * after / before - 100:0})";
 
     private static List<string>? _extra;
 

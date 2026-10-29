@@ -59,7 +59,11 @@ internal static class FileTools
 
         var kind = MediaKinds.Of(files[0]);
         string[] levels = kind == MediaKind.Image ? ["Dengeli", "Daha küçük"] : ["Dengeli", "Daha küçük", "En küçük"];
-        var pick = await ResultCard.ChooseAsync("Sıkıştır", Describe(files), levels, anchor);
+        var estimates = await EstimateCompressedAsync(files, kind, levels.Length);
+        var labels = levels.Select((l, i) => estimates?[i] is { } bytes ? $"{l} · ~{MediaKinds.Size(bytes)}" : l).ToList();
+        var message = estimates is null ? Describe(files)
+            : $"{Describe(files)}\nTahmini boyutlar{(kind == MediaKind.Video ? "; videoda içeriğe göre epey değişebilir" : "")}.";
+        var pick = await ResultCard.ChooseAsync("Sıkıştır", message, labels, anchor);
         if (pick < 0)
             return;
 
@@ -237,6 +241,61 @@ internal static class FileTools
             throw new InvalidOperationException("zaten yeterince küçük, daha da küçülmedi.");
         }
         return output;
+    }
+
+    /// <summary>
+    /// Rough output size per level for the files together, or null when it cannot be said (images, or
+    /// a file Windows reports no length for). Audio is a fixed bitrate, so close. Video quality is fixed
+    /// rather than size, so it is bits per pixel at a typical frame rate, never more than the original.
+    /// </summary>
+    private static async Task<long?[]?> EstimateCompressedAsync(List<string> files, MediaKind kind, int levels)
+    {
+        // Each file is asked separately; past a handful the card would wait too long.
+        if (kind == MediaKind.Image || files.Count > 20)
+            return null;
+        int[] audioKbps = kind == MediaKind.Video ? [128, 96, 96] : [128, 96, 64];
+        // crf 26, 30, 34 at 30 fps; measured on phone and screen clips, real sizes came within about 1.5x.
+        double[] bitsPerPixel = [0.055, 0.035, 0.022];
+        var totals = new double[levels];
+        try
+        {
+            foreach (var file in files)
+            {
+                var storage = await Windows.Storage.StorageFile.GetFileFromPathAsync(file);
+                var original = new FileInfo(file).Length;
+                if (kind == MediaKind.Video)
+                {
+                    var video = await storage.Properties.GetVideoPropertiesAsync();
+                    var seconds = video.Duration.TotalSeconds;
+                    if (seconds <= 0 || video.Width == 0 || video.Height == 0)
+                        return null;
+                    // Phone clips are often stored sideways with a rotation flag; ffmpeg turns them upright first.
+                    var width = video.Orientation is Windows.Storage.FileProperties.VideoOrientation.Rotate90 or Windows.Storage.FileProperties.VideoOrientation.Rotate270
+                        ? video.Height : video.Width;
+                    for (var i = 0; i < levels; i++)
+                    {
+                        // "En küçük" also scales down to 1280 wide.
+                        var scale = i == 2 && width > 1280 ? 1280.0 / width : 1;
+                        var pixels = video.Width * scale * video.Height * scale;
+                        var bytes = (pixels * 30 * bitsPerPixel[i] + audioKbps[i] * 1000) * seconds / 8;
+                        totals[i] += Math.Min(bytes, original);
+                    }
+                }
+                else
+                {
+                    var seconds = (await storage.Properties.GetMusicPropertiesAsync()).Duration.TotalSeconds;
+                    if (seconds <= 0)
+                        return null;
+                    for (var i = 0; i < levels; i++)
+                        totals[i] += Math.Min(audioKbps[i] * 1000 * seconds / 8, original);
+                }
+            }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Runtime.InteropServices.COMException or ArgumentException)
+        {
+            return null;
+        }
+        return [.. totals.Select(t => (long?)t)];
     }
 
     private static async Task<string?> ResizeOneAsync(string input, MediaKind kind, int size, Action<double> progress, CancellationToken cancel)

@@ -15,6 +15,44 @@ internal static class Native
     /// <summary>The top-level window under a screen point; the ring is gone by the time tools run.</summary>
     public static IntPtr WindowAt(int x, int y) => GetAncestor(WindowFromPoint(new POINT { X = x, Y = y }), GA_ROOT);
 
+    /// <summary>The innermost window under a screen point, such as the desktop's icon list.</summary>
+    public static IntPtr ChildWindowAt(int x, int y) => WindowFromPoint(new POINT { X = x, Y = y });
+
+    /// <summary>
+    /// True when a list view (the desktop's icons) has an item at a screen point. The hit test needs its
+    /// argument in the list's own process, so it goes through memory allocated there.
+    /// </summary>
+    public static bool ListViewItemAt(IntPtr list, int x, int y)
+    {
+        var point = new POINT { X = x, Y = y };
+        if (!ScreenToClient(list, ref point))
+            return false;
+        GetWindowThreadProcessId(list, out var pid);
+        var process = OpenProcess(PROCESS_VM_OPERATION | PROCESS_VM_READ | PROCESS_VM_WRITE, false, pid);
+        if (process == IntPtr.Zero)
+            return false;
+        var memory = VirtualAllocEx(process, IntPtr.Zero, 64, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+        try
+        {
+            // LVHITTESTINFO: pt, flags, iItem, iSubItem, iGroup.
+            var info = new byte[24];
+            BitConverter.GetBytes(point.X).CopyTo(info, 0);
+            BitConverter.GetBytes(point.Y).CopyTo(info, 4);
+            BitConverter.GetBytes(-1).CopyTo(info, 12); // stays "no item" if the list never answers
+            if (memory == IntPtr.Zero || !WriteProcessMemory(process, memory, info, info.Length, out _))
+                return false;
+            if (SendMessageTimeout(list, LVM_HITTEST, IntPtr.Zero, memory, SMTO_ABORTIFHUNG, 500, out _) == IntPtr.Zero)
+                return false;
+            return ReadProcessMemory(process, memory, info, info.Length, out _) && BitConverter.ToInt32(info, 12) >= 0;
+        }
+        finally
+        {
+            if (memory != IntPtr.Zero)
+                VirtualFreeEx(process, memory, 0, MEM_RELEASE);
+            CloseHandle(process);
+        }
+    }
+
     public static string WindowTitle(IntPtr hwnd)
     {
         var buffer = new StringBuilder(256);
@@ -131,6 +169,10 @@ internal static class Native
     private static void Send(params INPUT[] inputs) => SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
 
     private const uint GA_ROOT = 2;
+    private const int LVM_HITTEST = 0x1012;
+    private const uint SMTO_ABORTIFHUNG = 0x2;
+    private const uint PROCESS_VM_OPERATION = 0x8, PROCESS_VM_READ = 0x10, PROCESS_VM_WRITE = 0x20;
+    private const uint MEM_COMMIT = 0x1000, MEM_RESERVE = 0x2000, MEM_RELEASE = 0x8000, PAGE_READWRITE = 0x4;
     private const int GWL_EXSTYLE = -20;
     private const long WS_EX_TOPMOST = 0x8, WS_EX_TRANSPARENT = 0x20, WS_EX_TOOLWINDOW = 0x80, WS_EX_LAYERED = 0x80000, WS_EX_NOACTIVATE = 0x8000000;
     private static readonly IntPtr HWND_TOPMOST = -1, HWND_NOTOPMOST = -2;
@@ -175,4 +217,12 @@ internal static class Native
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetClassName(IntPtr hWnd, StringBuilder name, int maxCount);
     [DllImport("user32.dll")] private static extern bool SetCursorPos(int x, int y);
     [DllImport("user32.dll")] private static extern bool SetWindowDisplayAffinity(IntPtr hwnd, uint affinity);
+    [DllImport("user32.dll")] private static extern bool ScreenToClient(IntPtr hwnd, ref POINT point);
+    [DllImport("user32.dll")] private static extern IntPtr SendMessageTimeout(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, uint flags, uint timeout, out IntPtr result);
+    [DllImport("kernel32.dll")] private static extern IntPtr OpenProcess(uint access, bool inherit, uint pid);
+    [DllImport("kernel32.dll")] private static extern IntPtr VirtualAllocEx(IntPtr process, IntPtr address, nuint size, uint type, uint protect);
+    [DllImport("kernel32.dll")] private static extern bool VirtualFreeEx(IntPtr process, IntPtr address, nuint size, uint type);
+    [DllImport("kernel32.dll")] private static extern bool WriteProcessMemory(IntPtr process, IntPtr address, byte[] buffer, nint size, out nint written);
+    [DllImport("kernel32.dll")] private static extern bool ReadProcessMemory(IntPtr process, IntPtr address, byte[] buffer, nint size, out nint read);
+    [DllImport("kernel32.dll")] private static extern bool CloseHandle(IntPtr handle);
 }
