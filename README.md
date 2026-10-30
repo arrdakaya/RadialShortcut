@@ -45,8 +45,6 @@
 
 Download **[RadialShortcut-Setup.exe](https://github.com/arrdakaya/RadialShortcut/releases/latest/download/RadialShortcut-Setup.exe)** and run it. No admin rights needed. RadialShortcut lives in the tray, can start with Windows and updates itself.
 
-Prefer no installer? The [portable zip](https://github.com/arrdakaya/RadialShortcut/releases/latest/download/RadialShortcut-win-x64.zip) runs from any folder.
-
 Requires Windows 10 (version 2004) or Windows 11, 64-bit.
 
 ## How to use
