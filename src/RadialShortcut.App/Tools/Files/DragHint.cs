@@ -61,7 +61,7 @@ internal sealed class DragHint : Window
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(6),
             Padding = new Thickness(8, 4, 8, 4),
-            Child = new TextBlock { Text = "Bekle ya da Shift: araçlar", Foreground = Palette.Text, FontSize = 12 },
+            Child = new TextBlock { Text = T("Bekle ya da Shift: araçlar", "Pause or Shift: tools"), Foreground = Palette.Text, FontSize = 12 },
         };
 
         SourceInitialized += (_, _) => Native.MakeClickThrough(this);

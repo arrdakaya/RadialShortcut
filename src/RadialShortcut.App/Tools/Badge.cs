@@ -65,7 +65,7 @@ internal sealed class Badge : Window
             CornerRadius = new CornerRadius(11),
             Background = new SolidColorBrush(Color.FromRgb(0xC4, 0x2B, 0x1C)),
             Cursor = Cursors.Hand,
-            ToolTip = "Durdur",
+            ToolTip = T("Durdur", "Stop"),
             Child = new Border { Width = 8, Height = 8, Background = Brushes.White, CornerRadius = new CornerRadius(1) },
         };
         stop.MouseLeftButtonUp += (_, _) => onStop();

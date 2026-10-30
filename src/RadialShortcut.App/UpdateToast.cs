@@ -40,7 +40,7 @@ internal sealed class UpdateToast : Window
             {
                 Children =
                 {
-                    new TextBlock { Text = $"RadialShortcut v{version.ToString(3)} kuruluyor", Foreground = Palette.Text, FontSize = 13, FontWeight = FontWeights.SemiBold },
+                    new TextBlock { Text = T($"RadialShortcut v{version.ToString(3)} kuruluyor", $"Installing RadialShortcut v{version.ToString(3)}"), Foreground = Palette.Text, FontSize = 13, FontWeight = FontWeights.SemiBold },
                     _status,
                     _bar,
                 },

@@ -14,21 +14,21 @@ internal static class FileUnlocker
 {
     public static async Task RunAsync(IntPtr target, Int32Rect anchor)
     {
-        var files = await SelectedFiles.GetAsync(target, "Kilidi açılacak dosyalar", "Tüm dosyalar|*.*");
+        var files = await SelectedFiles.GetAsync(target, T("Kilidi açılacak dosyalar", "Files to unlock"), T("Tüm dosyalar", "All files") + "|*.*");
         if (files.Count == 0)
             return;
 
         var holders = await Task.Run(() => Holders(files));
-        var what = files.Count == 1 ? Path.GetFileName(files[0]) : $"{files.Count} dosya";
+        var what = files.Count == 1 ? Path.GetFileName(files[0]) : T($"{files.Count} dosya", $"{files.Count} files");
         if (holders.Count == 0)
         {
-            ResultCard.ForMessage("Dosya serbest", $"{what} şu an hiçbir uygulamada açık değil.", anchor)
-                .WithButton("Tamam", () => { }, primary: true).ShowNear();
+            ResultCard.ForMessage(T("Dosya serbest", "File is free"), T($"{what} şu an hiçbir uygulamada açık değil.", $"{what} isn't open in any app right now."), anchor)
+                .WithButton(T("Tamam", "OK"), () => { }, primary: true).ShowNear();
             return;
         }
 
         var names = string.Join(", ", holders.Select(p => p.ProcessName + ".exe").Distinct());
-        if (!await ResultCard.AskAsync("Kapatılsın mı?", $"{what} şunlarda açık: {names}. Kaydedilmemiş işler kaybolabilir.", "Kapat", anchor))
+        if (!await ResultCard.AskAsync(T("Kapatılsın mı?", "Close them?"), T($"{what} şunlarda açık: {names}. Kaydedilmemiş işler kaybolabilir.", $"{what} is open in: {names}. Unsaved work may be lost."), T("Kapat", "Close"), anchor))
             return;
 
         await Task.Run(() => Close(holders));
@@ -38,11 +38,11 @@ internal static class FileUnlocker
         foreach (var process in left)
             process.Dispose();
         if (left.Count == 0)
-            ResultCard.ForMessage("Kilit açıldı", $"{what} artık serbest.", anchor)
-                .WithButton("Tamam", () => { }, primary: true).ShowNear();
+            ResultCard.ForMessage(T("Kilit açıldı", "Unlocked"), T($"{what} artık serbest.", $"{what} is free now."), anchor)
+                .WithButton(T("Tamam", "OK"), () => { }, primary: true).ShowNear();
         else
-            ResultCard.ForMessage("Kapatılamadı", $"{string.Join(", ", left.Select(p => p.ProcessName + ".exe").Distinct())} kapanmadı; yönetici olarak çalışıyor olabilir.", anchor)
-                .WithButton("Tamam", () => { }, primary: true).ShowNear();
+            ResultCard.ForMessage(T("Kapatılamadı", "Couldn't close"), T($"{string.Join(", ", left.Select(p => p.ProcessName + ".exe").Distinct())} kapanmadı; yönetici olarak çalışıyor olabilir.", $"{string.Join(", ", left.Select(p => p.ProcessName + ".exe").Distinct())} didn't close; it may be running as administrator."), anchor)
+                .WithButton(T("Tamam", "OK"), () => { }, primary: true).ShowNear();
     }
 
     /// <summary>Windowed apps get the chance to close on their own first; whatever is left is ended.</summary>

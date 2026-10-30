@@ -19,9 +19,9 @@ internal sealed class LibraryWindow : Window
 
     private static readonly Dictionary<string, string> ToolNames = new()
     {
-        ["capture"] = "Ekran görüntüsü", ["record"] = "Ekran kaydı", ["ocr"] = "Metin", ["convert"] = "Dönüştürüldü",
-        ["compress"] = "Sıkıştırıldı", ["resize"] = "Boyutlandırıldı", ["trim"] = "Kırpıldı", ["annotate"] = "Not eklendi",
-        ["download"] = "İndirildi", ["nobg"] = "Arka plan silindi", ["file"] = "Dosya",
+        ["capture"] = T("Ekran görüntüsü", "Screenshot"), ["record"] = T("Ekran kaydı", "Recording"), ["ocr"] = T("Metin", "Text"), ["convert"] = T("Dönüştürüldü", "Converted"),
+        ["compress"] = T("Sıkıştırıldı", "Compressed"), ["resize"] = T("Boyutlandırıldı", "Resized"), ["trim"] = T("Kırpıldı", "Trimmed"), ["annotate"] = T("Not eklendi", "Annotated"),
+        ["download"] = T("İndirildi", "Downloaded"), ["nobg"] = T("Arka plan silindi", "Background removed"), ["file"] = T("Dosya", "File"),
     };
 
     private readonly TextBox _search = new() { FontSize = 14, Padding = new Thickness(8, 6, 8, 6) };
@@ -48,7 +48,7 @@ internal sealed class LibraryWindow : Window
 
     private LibraryWindow()
     {
-        Title = "Kütüphane";
+        Title = T("Kütüphane", "Library");
         Width = 720;
         Height = 640;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
@@ -62,11 +62,11 @@ internal sealed class LibraryWindow : Window
         _list.Foreground = Palette.Text;
 
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 8, 0, 0) };
-        buttons.Children.Add(Button("Klasörü aç", () => ToolRunner.OpenUrl(AppPaths.OutputDirectory)));
-        buttons.Children.Add(Button("Klasörde göster", () => { if (Selected?.Path is { } p) ToolRunner.ShowInFolder(p); }));
-        buttons.Children.Add(Button("Sil", Delete));
-        buttons.Children.Add(Button("Kopyala", Copy));
-        buttons.Children.Add(Button("Aç", Open, primary: true));
+        buttons.Children.Add(Button(T("Klasörü aç", "Open folder"), () => ToolRunner.OpenUrl(AppPaths.OutputDirectory)));
+        buttons.Children.Add(Button(T("Klasörde göster", "Show in folder"), () => { if (Selected?.Path is { } p) ToolRunner.ShowInFolder(p); }));
+        buttons.Children.Add(Button(T("Sil", "Delete"), Delete));
+        buttons.Children.Add(Button(T("Kopyala", "Copy"), Copy));
+        buttons.Children.Add(Button(T("Aç", "Open"), Open, primary: true));
 
         var top = new StackPanel();
         top.Children.Add(_search);
@@ -137,7 +137,7 @@ internal sealed class LibraryWindow : Window
         var shown = _all.Where(e => History.Matches(e, _search.Text) || ToolNames.GetValueOrDefault(e.Tool, "").Contains(_search.Text, StringComparison.CurrentCultureIgnoreCase)).Take(300).ToList();
         foreach (var entry in shown)
             _list.Items.Add(Row(entry));
-        _count.Text = shown.Count == _all.Count ? $"{_all.Count} kayıt" : $"{shown.Count} / {_all.Count} kayıt";
+        _count.Text = shown.Count == _all.Count ? T($"{_all.Count} kayıt", $"{_all.Count} items") : T($"{shown.Count} / {_all.Count} kayıt", $"{shown.Count} / {_all.Count} items");
     }
 
     private FrameworkElement Row(HistoryEntry entry)
@@ -221,17 +221,17 @@ internal sealed class LibraryWindow : Window
         string question, detail;
         if (entries.Count == 1)
         {
-            question = texts.Count == 1 ? "Yazı kütüphaneden silinsin mi?" : "Dosya silinsin mi?";
+            question = texts.Count == 1 ? T("Yazı kütüphaneden silinsin mi?", "Remove the text from the library?") : T("Dosya silinsin mi?", "Delete the file?");
             detail = texts.Count == 1 ? Shorten(texts[0].Text!) : Path.GetFileName(paths[0]);
         }
         else if (entries.Count > 1)
         {
-            question = $"{entries.Count} kayıt silinsin mi?";
-            detail = string.Join(", ", new[] { paths.Count > 0 ? $"{paths.Count} dosya diskten" : null, texts.Count > 0 ? $"{texts.Count} yazı listeden" : null }.OfType<string>());
+            question = T($"{entries.Count} kayıt silinsin mi?", $"Delete {entries.Count} items?");
+            detail = string.Join(", ", new[] { paths.Count > 0 ? T($"{paths.Count} dosya diskten", $"{paths.Count} files from disk") : null, texts.Count > 0 ? T($"{texts.Count} yazı listeden", $"{texts.Count} texts from the list") : null }.OfType<string>());
         }
         else
             return;
-        if (!await ResultCard.AskAsync(question, detail, "Sil", anchor))
+        if (!await ResultCard.AskAsync(question, detail, T("Sil", "Delete"), anchor))
             return;
         foreach (var path in paths)
             ToolRunner.TryDelete(path);

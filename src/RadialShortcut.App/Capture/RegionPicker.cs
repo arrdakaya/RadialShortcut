@@ -11,7 +11,7 @@ namespace RadialShortcut.App.Capture;
 public sealed record CapturedRegion(BitmapSource Image, Int32Rect ScreenRect, Display Display);
 
 /// <summary>
-/// The shared "capture layer" every screen tool starts with (PLAN.md, section 6).
+/// The shared "capture layer" every screen tool starts with.
 /// Freezes every monitor, covers each with its own overlay, and lets the user drag a rectangle.
 /// A click without dragging takes the whole monitor. Esc or right click cancels.
 /// A selection stays on one monitor; mixed-DPI rectangles spanning screens are not supported.

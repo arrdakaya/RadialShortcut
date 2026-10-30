@@ -31,7 +31,7 @@ internal static class FileJobs
                 badge.Text = $"{prefix}{verb}: {Path.GetFileName(input)}";
                 try
                 {
-                    var output = await work(input, p => badge.Dispatcher.BeginInvoke(() => badge.Text = $"{prefix}{verb} %{p:0}"), cancel.Token);
+                    var output = await work(input, p => badge.Dispatcher.BeginInvoke(() => badge.Text = T($"{prefix}{verb} %{p:0}", $"{prefix}{verb} {p:0}%")), cancel.Token);
                     if (output is not null)
                     {
                         outputs.Add(output);
@@ -60,9 +60,9 @@ internal static class FileJobs
 
         var title = outputs.Count switch
         {
-            0 => $"{verb}: olmadı",
-            1 => $"{verb}: hazır",
-            var n => $"{verb}: {n} dosya hazır",
+            0 => T($"{verb}: olmadı", $"{verb}: failed"),
+            1 => T($"{verb}: hazır", $"{verb}: done"),
+            var n => T($"{verb}: {n} dosya hazır", $"{verb}: {n} files done"),
         };
         // Compress and resize are about size, so their card compares with the original.
         var compare = tool is "compress" or "resize" && outputs.All(o => File.Exists(sources[o]));
@@ -71,21 +71,21 @@ internal static class FileJobs
         if (compare && outputs.Count > 1)
         {
             long before = outputs.Sum(o => new FileInfo(sources[o]).Length), after = outputs.Sum(o => new FileInfo(o).Length);
-            lines = lines.Append($"Toplam: {MediaKinds.Size(before)} → {MediaKinds.Size(after)}{Percent(before, after)}");
+            lines = lines.Append($"{T("Toplam", "Total")}: {MediaKinds.Size(before)} → {MediaKinds.Size(after)}{Percent(before, after)}");
         }
         if (cancel.IsCancellationRequested)
-            lines = lines.Append("Durduruldu.");
+            lines = lines.Append(T("Durduruldu.", "Stopped."));
 
         var card = ResultCard.ForMessage(title, string.Join("\n", lines), anchor);
         if (outputs.Count > 0)
         {
             var first = outputs[0];
-            card.WithButton("Sil", () => ToolRunner.ConfirmDelete([.. outputs, .. extra], anchor));
-            card.WithButton("Klasörde göster", () => ToolRunner.ShowInFolder(first));
+            card.WithButton(T("Sil", "Delete"), () => ToolRunner.ConfirmDelete([.. outputs, .. extra], anchor));
+            card.WithButton(T("Klasörde göster", "Show in folder"), () => ToolRunner.ShowInFolder(first));
             if (outputs.Count == 1)
-                card.WithButton("Aç", () => ToolRunner.OpenUrl(first));
+                card.WithButton(T("Aç", "Open"), () => ToolRunner.OpenUrl(first));
         }
-        card.WithButton("Tamam", () => { }, primary: true).ShowNear();
+        card.WithButton(T("Tamam", "OK"), () => { }, primary: true).ShowNear();
     }
 
     /// <summary>"69,5 MB → 18,2 MB (−%74)".</summary>
@@ -96,7 +96,7 @@ internal static class FileJobs
     }
 
     private static string Percent(long before, long after) =>
-        before <= 0 ? "" : after <= before ? $" (−%{100 - 100.0 * after / before:0})" : $" (+%{100.0 * after / before - 100:0})";
+        before <= 0 ? "" : after <= before ? T($" (−%{100 - 100.0 * after / before:0})", $" (−{100 - 100.0 * after / before:0}%)") : T($" (+%{100.0 * after / before - 100:0})", $" (+{100.0 * after / before - 100:0}%)");
 
     private static List<string>? _extra;
 

@@ -21,7 +21,7 @@ public interface IGestureSink
 }
 
 /// <summary>
-/// Right-button hold gesture (PLAN.md, section 4). Pure logic: no Win32, no clock.
+/// Right-button hold gesture. Pure logic: no Win32, no clock.
 /// Every On* method returns true when the mouse event must be swallowed.
 /// </summary>
 public sealed class GestureStateMachine(GestureSettings settings, IGestureSink sink)

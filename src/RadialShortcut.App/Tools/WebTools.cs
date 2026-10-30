@@ -12,7 +12,7 @@ using RadialShortcut.Core;
 namespace RadialShortcut.App.Tools;
 
 /// <summary>
-/// The two tools that send data over the internet (PLAN.md, section 7). Each asks once before its first use.
+/// The two tools that send data over the internet. Each asks once before its first use.
 /// </summary>
 internal static class WebTools
 {
@@ -22,7 +22,7 @@ internal static class WebTools
     {
         if (await RegionPicker.PickAsync() is not { } region)
             return;
-        if (!await ConsentAsync("lens", "Görselle ara", "Seçtiğin görüntü Google Lens'e gönderilecek.", region.ScreenRect))
+        if (!await ConsentAsync("lens", T("Görselle ara", "Search by image"), T("Seçtiğin görüntü Google Lens'e gönderilecek.", "The region you picked is sent to Google Lens."), region.ScreenRect))
             return;
 
         // Uploading from here gives a results link bound to our own session, which the browser cannot open.
@@ -40,8 +40,8 @@ internal static class WebTools
     private static string LensPage(string base64) => $$"""
         <!doctype html><meta charset="utf-8"><title>Google Lens</title>
         <body style="font:15px Segoe UI,sans-serif;margin:40px">
-        <p id="msg">Google Lens'e gönderiliyor…</p>
-        <form id="f" method="post" enctype="multipart/form-data" action="https://lens.google.com/v3/upload?hl=tr&ep=gsbubb&st={{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}">
+        <p id="msg">{{T("Google Lens'e gönderiliyor…", "Sending to Google Lens…")}}</p>
+        <form id="f" method="post" enctype="multipart/form-data" action="https://lens.google.com/v3/upload?hl={{(English ? "en" : "tr")}}&ep=gsbubb&st={{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}">
         <input type="file" name="encoded_image" id="i" hidden></form>
         <script>
         try {
@@ -51,7 +51,7 @@ internal static class WebTools
           document.getElementById("i").files = dt.files;
           document.getElementById("f").submit();
         } catch (e) {
-          document.getElementById("msg").innerHTML = 'Görüntü panoya kopyalandı. <a href="https://lens.google.com/">Google Lens</a> sayfasında Ctrl+V ile yapıştır.';
+          document.getElementById("msg").innerHTML = '{{T("Görüntü panoya kopyalandı. <a href=\"https://lens.google.com/\">Google Lens</a> sayfasında Ctrl+V ile yapıştır.", "The image is on the clipboard. Paste it with Ctrl+V on <a href=\"https://lens.google.com/\">Google Lens</a>.")}}';
         }
         </script>
         """;
@@ -66,7 +66,7 @@ internal static class WebTools
         var settings = ToolRunner.Settings;
         var target = settings.TranslateTarget.ToUpperInvariant();
         var useDeepL = !string.IsNullOrWhiteSpace(settings.DeepLApiKey);
-        if (!await ConsentAsync("translate", "Ekrandan çevir", $"Okunan metin çeviri için {(useDeepL ? "DeepL'e" : "Google Çeviri'ye")} gönderilecek.", region.ScreenRect))
+        if (!await ConsentAsync("translate", T("Ekrandan çevir", "Translate from screen"), T($"Okunan metin çeviri için {(useDeepL ? "DeepL'e" : "Google Çeviri'ye")} gönderilecek.", $"The text read from the screen is sent to {(useDeepL ? "DeepL" : "Google Translate")}."), region.ScreenRect))
             return;
 
         Func<string, Task<(string Text, string Source)>> translate = useDeepL
@@ -81,9 +81,9 @@ internal static class WebTools
             (translated, source) = await translate(target);
         }
 
-        ResultCard.ForText($"Çeviri ({source.ToUpperInvariant()} → {target})", translated, region.ScreenRect)
-            .WithButton("Orijinali kopyala", () => ToolRunner.CopyText(text))
-            .WithButton("Kopyala", () => ToolRunner.CopyText(translated), primary: true)
+        ResultCard.ForText($"{T("Çeviri", "Translation")} ({source.ToUpperInvariant()} → {target})", translated, region.ScreenRect)
+            .WithButton(T("Orijinali kopyala", "Copy original"), () => ToolRunner.CopyText(text))
+            .WithButton(T("Kopyala", "Copy"), () => ToolRunner.CopyText(translated), primary: true)
             .ShowNear();
     }
 
@@ -114,13 +114,13 @@ internal static class WebTools
         request.Headers.Authorization = new AuthenticationHeaderValue("DeepL-Auth-Key", key);
         using var response = await Http.SendAsync(request);
         if (response.StatusCode == HttpStatusCode.Forbidden)
-            throw new InvalidOperationException("DeepL anahtarı geçersiz (config.json → deepLApiKey).");
+            throw new InvalidOperationException(T("DeepL anahtarı geçersiz (config.json → deepLApiKey).", "The DeepL key is invalid (config.json → deepLApiKey)."));
         if (response.StatusCode == (HttpStatusCode)456)
-            throw new InvalidOperationException("DeepL aylık karakter sınırı doldu.");
+            throw new InvalidOperationException(T("DeepL aylık karakter sınırı doldu.", "The DeepL monthly character limit is used up."));
         response.EnsureSuccessStatusCode();
 
         var body = await response.Content.ReadFromJsonAsync<DeepLResponse>();
-        var first = body?.Translations.FirstOrDefault() ?? throw new InvalidOperationException("DeepL boş yanıt verdi.");
+        var first = body?.Translations.FirstOrDefault() ?? throw new InvalidOperationException(T("DeepL boş yanıt verdi.", "DeepL returned an empty response."));
         return (first.Text, first.DetectedSourceLanguage);
     }
 
@@ -137,7 +137,7 @@ internal static class WebTools
         if (granted.Contains(tool))
             return true;
 
-        if (!await ResultCard.AskAsync($"{title}: internet izni", $"{what} Bu soru bir kez sorulur.", "İzin ver", anchor))
+        if (!await ResultCard.AskAsync(T($"{title}: internet izni", $"{title}: internet access"), T($"{what} Bu soru bir kez sorulur.", $"{what} You'll only be asked once."), T("İzin ver", "Allow"), anchor))
             return false;
 
         granted.Add(tool);

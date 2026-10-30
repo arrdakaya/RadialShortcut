@@ -15,13 +15,13 @@
             <tb:TaskbarIcon.ContextMenu>
                 <ContextMenu>
                     <MenuItem x:Name="UpdateItem" Header="Güncelle" Visibility="Collapsed" Click="OnUpdateClick" />
-                    <MenuItem Header="Kütüphane" Click="OnLibraryClick" />
+                    <MenuItem x:Name="LibraryItem" Header="Kütüphane" Click="OnLibraryClick" />
                     <MenuItem x:Name="PauseItem" Header="Duraklat" IsCheckable="True" Click="OnPauseClick" />
                     <MenuItem x:Name="DebugItem" Header="Debug paneli" IsCheckable="True" IsChecked="False" Click="OnDebugClick" />
-                    <MenuItem Header="Ayarlar…" Click="OnSettingsClick" />
+                    <MenuItem x:Name="SettingsItem" Header="Ayarlar…" Click="OnSettingsClick" />
                     <MenuItem x:Name="CheckUpdateItem" Header="Güncellemeleri denetle" Click="OnCheckUpdateClick" />
                     <Separator />
-                    <MenuItem Header="Çıkış" Click="OnExitClick" />
+                    <MenuItem x:Name="ExitItem" Header="Çıkış" Click="OnExitClick" />
                 </ContextMenu>
             </tb:TaskbarIcon.ContextMenu>
         </tb:TaskbarIcon>

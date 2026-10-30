@@ -67,7 +67,7 @@ internal static class Native
 
     /// <summary>
     /// Brings a window to the front before keys are sent to it. Windows only lets the process that
-    /// sent the last input do this, so a harmless key-up goes first (PLAN.md, section 7b).
+    /// sent the last input do this, so a harmless key-up goes first.
     /// </summary>
     public static void Focus(IntPtr hwnd)
     {

@@ -109,7 +109,7 @@ public static class ToolRunner
                     await ActionRunner.RunAsync(action, target);
                     break;
                 default:
-                    ResultCard.Near(point, item.Title, "Bu araç henüz hazır değil.").ShowNear();
+                    ResultCard.Near(point, item.Title, T("Bu araç henüz hazır değil.", "This tool isn't ready yet.")).ShowNear();
                     break;
             }
         }
@@ -123,7 +123,7 @@ public static class ToolRunner
             catch (IOException)
             {
             }
-            ResultCard.Near(ScreenCapture.CursorPosition(), $"{item.Title}: hata", $"{e.Message} (0x{e.HResult:X8})").ShowNear();
+            ResultCard.Near(ScreenCapture.CursorPosition(), T($"{item.Title}: hata", $"{item.Title}: error"), $"{e.Message} (0x{e.HResult:X8})").ShowNear();
         }
         finally
         {
@@ -142,11 +142,11 @@ public static class ToolRunner
         CopyImage(region.Image);
         var file = Save(region.Image);
 
-        ResultCard.ForImage("Panoya kopyalandı", $"{region.ScreenRect.Width} × {region.ScreenRect.Height} · {Path.GetFileName(file)}", region.Image, region.ScreenRect)
-            .WithButton("Dosyayı sil", () => DeleteCapture(file))
-            .WithButton("Klasörde göster", () => ShowInFolder(file))
-            .WithButton("Not ekle", () => _ = AnnotateWindow.OpenAsync(file, region.Image))
-            .WithButton("Tamam", () => { }, primary: true)
+        ResultCard.ForImage(T("Panoya kopyalandı", "Copied to clipboard"), $"{region.ScreenRect.Width} × {region.ScreenRect.Height} · {Path.GetFileName(file)}", region.Image, region.ScreenRect)
+            .WithButton(T("Dosyayı sil", "Delete file"), () => DeleteCapture(file))
+            .WithButton(T("Klasörde göster", "Show in folder"), () => ShowInFolder(file))
+            .WithButton(T("Not ekle", "Annotate"), () => _ = AnnotateWindow.OpenAsync(file, region.Image))
+            .WithButton(T("Tamam", "OK"), () => { }, primary: true)
             .ShowNear();
     }
 
@@ -171,8 +171,8 @@ public static class ToolRunner
 
         CopyText(text);
         Remember("ocr", text: text);
-        ResultCard.ForText("Metin panoya kopyalandı", text, region.ScreenRect)
-            .WithButton("Tamam", () => { }, primary: true)
+        ResultCard.ForText(T("Metin panoya kopyalandı", "Text copied to clipboard"), text, region.ScreenRect)
+            .WithButton(T("Tamam", "OK"), () => { }, primary: true)
             .ShowNear();
     }
 
@@ -186,17 +186,17 @@ public static class ToolRunner
         var results = reader.DecodeMultiple(new RGBLuminanceSource(pixels, w, h, RGBLuminanceSource.BitmapFormat.BGRA32));
         if (results is not { Length: > 0 })
         {
-            ResultCard.ForMessage("Kod bulunamadı", "Seçilen bölgede okunabilir bir QR kod ya da barkod yok.", region.ScreenRect).ShowNear();
+            ResultCard.ForMessage(T("Kod bulunamadı", "No code found"), T("Seçilen bölgede okunabilir bir QR kod ya da barkod yok.", "There's no readable QR code or barcode in the region."), region.ScreenRect).ShowNear();
             return;
         }
 
         var text = string.Join(Environment.NewLine, results.Select(r => r.Text).Distinct());
         CopyText(text);
-        var card = ResultCard.ForText($"{results[0].BarcodeFormat} panoya kopyalandı", text, region.ScreenRect);
+        var card = ResultCard.ForText(T($"{results[0].BarcodeFormat} panoya kopyalandı", $"{results[0].BarcodeFormat} copied to clipboard"), text, region.ScreenRect);
         if (results.Length == 1 && Uri.TryCreate(text.Trim(), UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https")
-            card.WithButton("Aç", () => OpenUrl(uri.AbsoluteUri), primary: true);
+            card.WithButton(T("Aç", "Open"), () => OpenUrl(uri.AbsoluteUri), primary: true);
         else
-            card.WithButton("Tamam", () => { }, primary: true);
+            card.WithButton(T("Tamam", "OK"), () => { }, primary: true);
         card.ShowNear();
     }
 
@@ -206,7 +206,7 @@ public static class ToolRunner
         var engine = OcrEngine.TryCreateFromUserProfileLanguages();
         if (engine is null)
         {
-            ResultCard.ForMessage("Metin okunamadı", "Windows'ta OCR destekli bir dil yüklü değil (Ayarlar → Zaman ve dil → Dil).", region.ScreenRect).ShowNear();
+            ResultCard.ForMessage(T("Metin okunamadı", "Couldn't read text"), T("Windows'ta OCR destekli bir dil yüklü değil (Ayarlar → Zaman ve dil → Dil).", "Windows has no language with OCR support installed (Settings → Time & language → Language)."), region.ScreenRect).ShowNear();
             return null;
         }
 
@@ -214,7 +214,7 @@ public static class ToolRunner
         var text = string.Join(Environment.NewLine, result.Lines.Select(l => l.Text)).Trim();
         if (text.Length == 0)
         {
-            ResultCard.ForMessage("Metin bulunamadı", "Seçilen bölgede okunabilir metin yok.", region.ScreenRect).ShowNear();
+            ResultCard.ForMessage(T("Metin bulunamadı", "No text found"), T("Seçilen bölgede okunabilir metin yok.", "There's no readable text in the region."), region.ScreenRect).ShowNear();
             return null;
         }
         return text;
@@ -273,8 +273,9 @@ public static class ToolRunner
         return bitmap;
     }
 
-    internal static string Save(BitmapSource image, string name = "Ekran görüntüsü")
+    internal static string Save(BitmapSource image, string? name = null)
     {
+        name ??= T("Ekran görüntüsü", "Screenshot");
         Directory.CreateDirectory(AppPaths.CaptureDirectory);
         var file = Path.Combine(AppPaths.CaptureDirectory, $"{name} {DateTime.Now:yyyy-MM-dd HHmmss}.png");
         using var stream = File.Create(file);
@@ -320,15 +321,15 @@ public static class ToolRunner
     /// <summary>Asks first, then deletes; a file that is still open somewhere is reported, not skipped silently.</summary>
     internal static async void ConfirmDelete(IReadOnlyList<string> files, Int32Rect anchor)
     {
-        var what = files.Count == 1 ? Path.GetFileName(files[0]) : $"{files.Count} dosya";
-        if (!await ResultCard.AskAsync("Silinsin mi?", what, "Sil", anchor))
+        var what = files.Count == 1 ? Path.GetFileName(files[0]) : T($"{files.Count} dosya", $"{files.Count} files");
+        if (!await ResultCard.AskAsync(T("Silinsin mi?", "Delete?"), what, T("Sil", "Delete"), anchor))
             return;
         foreach (var file in files)
             ToolRunner.TryDelete(file);
         var left = files.Where(File.Exists).ToList();
         if (left.Count > 0)
-            ResultCard.ForMessage("Silinemedi", $"{Path.GetFileName(left[0])} başka bir uygulamada açık olabilir.", anchor)
-                .WithButton("Tamam", () => { }, primary: true).ShowNear();
+            ResultCard.ForMessage(T("Silinemedi", "Couldn't delete"), T($"{Path.GetFileName(left[0])} başka bir uygulamada açık olabilir.", $"{Path.GetFileName(left[0])} may be open in another app."), anchor)
+                .WithButton(T("Tamam", "OK"), () => { }, primary: true).ShowNear();
     }
 
     internal static void Retry(Action action)

@@ -53,7 +53,7 @@ internal static class Ruler
                 Padding = new Thickness(10, 5, 10, 5),
                 Margin = new Thickness(12),
                 IsHitTestVisible = false,
-                Child = new TextBlock { Text = "Sürükleyerek ölç · Shift: yatay/dikey · Ctrl+C: kopyala · Esc: çık", Foreground = Brushes.Gainsboro, FontSize = 12 },
+                Child = new TextBlock { Text = T("Sürükleyerek ölç · Shift: yatay/dikey · Ctrl+C: kopyala · Esc: çık", "Drag to measure · Shift: straight · Ctrl+C: copy · Esc: exit"), Foreground = Brushes.Gainsboro, FontSize = 12 },
             });
 
             MouseMove += (_, e) => Update(e.GetPosition(Canvas));

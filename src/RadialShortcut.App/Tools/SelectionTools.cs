@@ -12,7 +12,7 @@ internal static class SelectionTools
     {
         if (await GetSelectedTextAsync(target) is not { } text)
         {
-            ResultCard.Near(at, "Seçili metin yok", "Önce aramak istediğin metni seç, sonra halkadan Web ara'yı kullan.").ShowToast(2600);
+            ResultCard.Near(at, T("Seçili metin yok", "No text selected"), T("Önce aramak istediğin metni seç, sonra halkadan Web ara'yı kullan.", "Select the text to search for first, then use Search from the ring.")).ShowToast(2600);
             return;
         }
 
@@ -27,20 +27,20 @@ internal static class SelectionTools
     {
         if (await GetSelectedTextAsync(target) is not { } text)
         {
-            ResultCard.Near(at, "Seçili ifade yok", "Örneğin 12*4+3 yazıp seç, sonra halkadan Hesapla'yı kullan.").ShowToast(2600);
+            ResultCard.Near(at, T("Seçili ifade yok", "No expression selected"), T("Örneğin 12*4+3 yazıp seç, sonra halkadan Hesapla'yı kullan.", "Type and select something like 12*4+3, then use Calc from the ring.")).ShowToast(2600);
             return;
         }
 
         if (!Expression.TryEvaluate(text, out var value))
         {
-            ResultCard.Near(at, "Hesaplanamadı", $"\"{Shorten(text)}\" bir aritmetik ifade değil.").ShowToast(2600);
+            ResultCard.Near(at, T("Hesaplanamadı", "Couldn't calculate"), T($"\"{Shorten(text)}\" bir aritmetik ifade değil.", $"\"{Shorten(text)}\" is not an arithmetic expression.")).ShowToast(2600);
             return;
         }
 
         var result = Expression.Format(value, text);
         ResultCard.ForText($"{Shorten(text)} =", result, new Int32Rect(at.X, at.Y, 1, 1))
-            .WithButton("Kopyala", () => ToolRunner.CopyText(result))
-            .WithButton("Yerine yaz", () => _ = PasteTextAsync(target, result), primary: true)
+            .WithButton(T("Kopyala", "Copy"), () => ToolRunner.CopyText(result))
+            .WithButton(T("Yerine yaz", "Replace"), () => _ = PasteTextAsync(target, result), primary: true)
             .ShowNear();
     }
 
@@ -55,7 +55,7 @@ internal static class SelectionTools
         Native.Focus(target);
         await Task.Delay(60);
         Native.SendPaste();
-        // The target may read the clipboard late (PLAN.md, section 7b).
+        // The target may read the clipboard late.
         await Task.Delay(400);
         RestoreClipboard(saved);
     }

@@ -28,7 +28,7 @@ internal static class ToolDeps
         new(YtDlp, "yt-dlp", "18 MB",
             "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe",
             "yt-dlp.exe", null, SumsUrl: "https://github.com/yt-dlp/yt-dlp/releases/latest/download/SHA2-256SUMS"),
-        new(Silueta, "arka plan modeli", "44 MB",
+        new(Silueta, T("arka plan modeli", "background model"), "44 MB",
             "https://github.com/danielgatis/rembg/releases/download/v0.0.0/silueta.onnx",
             "silueta.onnx", "75da6c8d2f8096ec743d071951be73b4a8bc7b3e51d9a6625d63644f90ffeedb"),
     ];
@@ -48,7 +48,7 @@ internal static class ToolDeps
             return true;
 
         var list = string.Join(", ", missing.Select(d => $"{d.Title} ({d.Size})"));
-        if (!await ResultCard.AskAsync("Gerekli araç indirilecek", $"Bu iş için bir kerelik indirme gerekiyor: {list}. Sonra internet gerekmez.", "İndir", anchor))
+        if (!await ResultCard.AskAsync(T("Gerekli araç indirilecek", "A tool needs to be downloaded"), T($"Bu iş için bir kerelik indirme gerekiyor: {list}. Sonra internet gerekmez.", $"This needs a one-time download: {list}. No internet needed after that."), T("İndir", "Download"), anchor))
             return false;
 
         using var cancel = new CancellationTokenSource();
@@ -60,8 +60,8 @@ internal static class ToolDeps
             {
                 var dep = missing[i];
                 var prefix = missing.Count > 1 ? $"{i + 1}/{missing.Count} · " : "";
-                badge.Text = $"{prefix}{dep.Title} indiriliyor";
-                await DownloadAsync(dep, p => badge.Dispatcher.BeginInvoke(() => badge.Text = $"{prefix}{dep.Title} indiriliyor %{p:0}"), cancel.Token);
+                badge.Text = T($"{prefix}{dep.Title} indiriliyor", $"{prefix}Downloading {dep.Title}");
+                await DownloadAsync(dep, p => badge.Dispatcher.BeginInvoke(() => badge.Text = T($"{prefix}{dep.Title} indiriliyor %{p:0}", $"{prefix}Downloading {dep.Title} {p:0}%")), cancel.Token);
             }
             return true;
         }
@@ -73,7 +73,7 @@ internal static class ToolDeps
         {
             badge.Close();
             // Whatever finished stays; a retry only fetches what is still missing.
-            return await ResultCard.AskAsync("İndirme tamamlanamadı", e.Message, "Tekrar dene", anchor)
+            return await ResultCard.AskAsync(T("İndirme tamamlanamadı", "Download failed"), e.Message, T("Tekrar dene", "Try again"), anchor)
                 && await EnsureAsync(anchor, ids);
         }
         finally
@@ -111,7 +111,7 @@ internal static class ToolDeps
             await using (var file = File.OpenRead(part))
                 actual = Convert.ToHexStringLower(await SHA256.HashDataAsync(file, cancel));
             if (!actual.Equals(expected, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidDataException($"{dep.Title}: indirilen dosya doğrulanamadı (SHA-256 tutmuyor), kullanılmadı.");
+                throw new InvalidDataException(T($"{dep.Title}: indirilen dosya doğrulanamadı (SHA-256 tutmuyor), kullanılmadı.", $"{dep.Title}: the downloaded file failed verification (SHA-256 mismatch) and was not used."));
 
             if (dep.ZipEntries is null)
             {
@@ -124,7 +124,7 @@ internal static class ToolDeps
             foreach (var name in dep.ZipEntries)
             {
                 var entry = zip.Entries.FirstOrDefault(e => e.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
-                    ?? throw new InvalidDataException($"{dep.Title}: arşivde {name} yok.");
+                    ?? throw new InvalidDataException(T($"{dep.Title}: arşivde {name} yok.", $"{dep.Title}: {name} is missing from the archive."));
                 entry.ExtractToFile(Path.Combine(AppPaths.ToolsDirectory, name), overwrite: true);
             }
         }
@@ -144,6 +144,6 @@ internal static class ToolDeps
             if (parts.Length == 2 && parts[1].TrimStart('*') == dep.File)
                 return parts[0];
         }
-        throw new InvalidDataException($"{dep.Title}: yayının SHA-256 listesinde dosya bulunamadı.");
+        throw new InvalidDataException(T($"{dep.Title}: yayının SHA-256 listesinde dosya bulunamadı.", $"{dep.Title}: the file is not in the release's SHA-256 list."));
     }
 }

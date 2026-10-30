@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using static RadialShortcut.Core.Loc;
 
 namespace RadialShortcut.Core;
 
@@ -7,7 +8,7 @@ public sealed record Ring(string Id, IReadOnlyList<RingItem> Items);
 
 /// <summary>
 /// The rings from config.json, checked and turned into slices, plus the choice of ring for a window:
-/// process + title, then process, then the global ring (PLAN.md, section 8).
+/// process + title, then process, then the global ring.
 /// </summary>
 public sealed class RingCatalog
 {
@@ -25,7 +26,7 @@ public sealed class RingCatalog
 
     public IEnumerable<Ring> All => _globals.Values.Concat(_specific.Select(s => s.Ring));
 
-    /// <summary>What was skipped and why, in Turkish, for the tray notice.</summary>
+    /// <summary>What was skipped and why, in the interface language, for the tray notice.</summary>
     public IReadOnlyList<string> Warnings { get; }
 
     public RingCatalog(IEnumerable<RingConfig>? rings, int defaultSliceCount)
@@ -38,22 +39,22 @@ public sealed class RingCatalog
             var name = config.Name ?? config.Id;
             if (string.IsNullOrWhiteSpace(config.Id) || !ids.Add(config.Id))
             {
-                warnings.Add($"{name}: her halkanın farklı bir id'si olmalı, halka atlandı.");
+                warnings.Add(T($"{name}: her halkanın farklı bir id'si olmalı, halka atlandı.", $"{name}: every ring needs its own id, ring skipped."));
                 continue;
             }
             var items = config.Slices.Select(s => ToItem(s, name, warnings)).OfType<RingItem>().Take(MaxSlices).ToList();
             if (config.Slices.Count > MaxSlices)
-                warnings.Add($"{name}: en fazla {MaxSlices} dilim olabilir, fazlası atlandı.");
+                warnings.Add(T($"{name}: en fazla {MaxSlices} dilim olabilir, fazlası atlandı.", $"{name}: at most {MaxSlices} slices, the rest skipped."));
             if (items.Count < MinSlices)
             {
-                warnings.Add($"{name}: en az {MinSlices} geçerli dilim gerekli, halka atlandı.");
+                warnings.Add(T($"{name}: en az {MinSlices} geçerli dilim gerekli, halka atlandı.", $"{name}: needs at least {MinSlices} valid slices, ring skipped."));
                 continue;
             }
 
             var layer = config.Layer?.Trim().ToLowerInvariant() ?? RingLayers.Main;
             if (!RingLayers.All.Contains(layer))
             {
-                warnings.Add($"{name}: \"{config.Layer}\" diye bir katman yok (main, files veya apps), halka atlandı.");
+                warnings.Add(T($"{name}: \"{config.Layer}\" diye bir katman yok (main, files veya apps), halka atlandı.", $"{name}: there is no layer \"{config.Layer}\" (main, files or apps), ring skipped."));
                 continue;
             }
 
@@ -61,13 +62,13 @@ public sealed class RingCatalog
             if (config.Match is null)
             {
                 if (!_globals.TryAdd(layer, ring))
-                    warnings.Add($"{name}: {layer} katmanında eşleşmesi olmayan ikinci halka atlandı (genel halka zaten var).");
+                    warnings.Add(T($"{name}: {layer} katmanında eşleşmesi olmayan ikinci halka atlandı (genel halka zaten var).", $"{name}: a second ring without a match on the {layer} layer was skipped (the global ring already exists)."));
                 continue;
             }
 
             if (string.IsNullOrWhiteSpace(config.Match.Process))
             {
-                warnings.Add($"{name}: match.process boş, halka atlandı.");
+                warnings.Add(T($"{name}: match.process boş, halka atlandı.", $"{name}: match.process is empty, ring skipped."));
                 continue;
             }
 
@@ -80,7 +81,7 @@ public sealed class RingCatalog
                 }
                 catch (ArgumentException)
                 {
-                    warnings.Add($"{name}: windowTitle geçerli bir düzenli ifade değil, halka atlandı.");
+                    warnings.Add(T($"{name}: windowTitle geçerli bir düzenli ifade değil, halka atlandı.", $"{name}: windowTitle is not a valid regular expression, ring skipped."));
                     continue;
                 }
             }
@@ -145,7 +146,7 @@ public sealed class RingCatalog
             var tool = DefaultRing.Items.Concat(DefaultFileRing.Items).FirstOrDefault(t => t.Id == toolId);
             if (tool is null)
             {
-                warnings.Add($"{ring}: \"{toolId}\" diye bir araç yok, dilim atlandı.");
+                warnings.Add(T($"{ring}: \"{toolId}\" diye bir araç yok, dilim atlandı.", $"{ring}: there is no tool \"{toolId}\", slice skipped."));
                 return null;
             }
             return tool with
@@ -159,36 +160,36 @@ public sealed class RingCatalog
 
         if (slice.Action is not { } action)
         {
-            warnings.Add($"{ring}: \"{slice.Label}\" diliminde ne tool ne action var, dilim atlandı.");
+            warnings.Add(T($"{ring}: \"{slice.Label}\" diliminde ne tool ne action var, dilim atlandı.", $"{ring}: slice \"{slice.Label}\" has neither a tool nor an action, slice skipped."));
             return null;
         }
 
         var label = slice.Label ?? "";
         string? problem = action.Type switch
         {
-            "launch" when string.IsNullOrWhiteSpace(action.Path) => "launch için path gerekli",
-            "url" when string.IsNullOrWhiteSpace(action.Url) => "url için url gerekli",
-            "hotkey" when !KeyChord.TryParse(action.Keys, out _) => $"\"{action.Keys}\" tanınan bir kısayol değil",
-            "text" when string.IsNullOrEmpty(action.Text) => "text için text gerekli",
+            "launch" when string.IsNullOrWhiteSpace(action.Path) => T("launch için path gerekli", "launch needs a path"),
+            "url" when string.IsNullOrWhiteSpace(action.Url) => T("url için url gerekli", "url needs a url"),
+            "hotkey" when !KeyChord.TryParse(action.Keys, out _) => T($"\"{action.Keys}\" tanınan bir kısayol değil", $"\"{action.Keys}\" is not a known shortcut"),
+            "text" when string.IsNullOrEmpty(action.Text) => T("text için text gerekli", "text needs a text"),
             "launch" or "url" or "hotkey" or "text" => null,
-            _ => $"bilinmeyen aksiyon türü \"{action.Type}\"",
+            _ => T($"bilinmeyen aksiyon türü \"{action.Type}\"", $"unknown action type \"{action.Type}\""),
         };
         if (problem is null && label.Length == 0)
-            problem = "label gerekli";
+            problem = T("label gerekli", "label is required");
         if (problem is not null)
         {
-            warnings.Add($"{ring}: \"{label}\" dilimi atlandı ({problem}).");
+            warnings.Add(T($"{ring}: \"{label}\" dilimi atlandı ({problem}).", $"{ring}: slice \"{label}\" skipped ({problem})."));
             return null;
         }
 
         var hint = slice.Hint ?? action.Type switch
         {
             // Apps picked from the Start menu list launch by an app id, not a file name worth showing.
-            "launch" when action.Path!.StartsWith("shell:", StringComparison.OrdinalIgnoreCase) => "Uygulama",
+            "launch" when action.Path!.StartsWith("shell:", StringComparison.OrdinalIgnoreCase) => T("Uygulama", "App"),
             "launch" => Path.GetFileName(action.Path!),
             "url" => action.Url!,
             "hotkey" => action.Keys!,
-            _ => "Metni yapıştır",
+            _ => T("Metni yapıştır", "Paste text"),
         };
         return new RingItem("action", label, slice.Title ?? label, hint, slice.Icon ?? ActionIcons[action.Type], action);
     }

@@ -30,7 +30,7 @@ internal static class BackgroundRemover
             return;
 
         // The session holds about 150 MB; it lives only as long as this run.
-        var badge = new Badge(anchor) { AtScreenTop = true, Text = "Arka plan siliniyor…" };
+        var badge = new Badge(anchor) { AtScreenTop = true, Text = T("Arka plan siliniyor…", "Removing background…") };
         badge.Show();
         InferenceSession? session = null;
         BitmapSource? result = null;
@@ -54,20 +54,20 @@ internal static class BackgroundRemover
         if (result is not null)
         {
             ToolRunner.CopyImage(result);
-            var file = ToolRunner.Save(result, "Arka plansız");
-            ResultCard.ForImage("Arka plan silindi", $"Panoya kopyalandı · {Path.GetFileName(file)}", result, anchor)
-                .WithButton("Sil", () => ToolRunner.ConfirmDelete([file], anchor))
-                .WithButton("Klasörde göster", () => ToolRunner.ShowInFolder(file))
-                .WithButton("Tamam", () => { }, primary: true)
+            var file = ToolRunner.Save(result, T("Arka plansız", "No background"));
+            ResultCard.ForImage(T("Arka plan silindi", "Background removed"), T($"Panoya kopyalandı · {Path.GetFileName(file)}", $"Copied · {Path.GetFileName(file)}"), result, anchor)
+                .WithButton(T("Sil", "Delete"), () => ToolRunner.ConfirmDelete([file], anchor))
+                .WithButton(T("Klasörde göster", "Show in folder"), () => ToolRunner.ShowInFolder(file))
+                .WithButton(T("Tamam", "OK"), () => { }, primary: true)
                 .ShowNear();
             return;
         }
 
-        await FileJobs.RunAsync("nobg", "Arka plan siliniyor", images, anchor, async (input, progress, cancel) =>
+        await FileJobs.RunAsync("nobg", T("Arka plan siliniyor", "Removing background"), images, anchor, async (input, progress, cancel) =>
         {
-            var image = ImageIO.TryLoad(input) ?? throw new NotSupportedException("resim okunamadı (PNG ya da JPG dene).");
+            var image = ImageIO.TryLoad(input) ?? throw new NotSupportedException(T("resim okunamadı (PNG ya da JPG dene).", "couldn't read the image (try PNG or JPG)."));
             var result = await RemoveAsync(model, image);
-            var output = FileJobs.OutputFor(input, " (arka plansız)", "png");
+            var output = FileJobs.OutputFor(input, T(" (arka plansız)", " (no background)"), "png");
             ImageIO.Save(result, output);
             return output;
         });

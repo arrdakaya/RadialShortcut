@@ -12,6 +12,9 @@
   // Kartların ve araç pencerelerinin teması: "system", "light" ya da "dark".
   "theme": "system",
 
+  // Arayüz dili: "system" (Windows diline göre), "tr" ya da "en". Değişince uygulamayı yeniden başlat.
+  "language": "system",
+
   // Güncellemelerin alınacağı GitHub deposu ("kullanıcı/depo"). Boş bırakırsan güncelleme denetlenmez.
   "updateRepo": "arrdakaya/RadialShortcut",
 

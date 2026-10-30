@@ -1,6 +1,6 @@
 namespace RadialShortcut.Core;
 
-/// <summary>A ring in config.json (PLAN.md, section 9). A ring without <see cref="Match"/> is the global one.</summary>
+/// <summary>A ring in config.json. A ring without <see cref="Match"/> is the global one.</summary>
 public sealed class RingConfig
 {
     public string Id { get; set; } = "";
@@ -12,7 +12,7 @@ public sealed class RingConfig
     public List<SliceConfig> Slices { get; set; } = [];
 }
 
-/// <summary>Which windows a ring is for (PLAN.md, section 8).</summary>
+/// <summary>Which windows a ring is for.</summary>
 public sealed class RingMatch
 {
     /// <summary>Process file name, with or without ".exe" ("chrome", "Code.exe").</summary>
@@ -33,7 +33,7 @@ public sealed class SliceConfig
     public SliceAction? Action { get; set; }
 }
 
-/// <summary>A basic action (PLAN.md, section 7b): launch, url, hotkey or text.</summary>
+/// <summary>A basic action: launch, url, hotkey or text.</summary>
 public sealed class SliceAction
 {
     public string Type { get; set; } = "";

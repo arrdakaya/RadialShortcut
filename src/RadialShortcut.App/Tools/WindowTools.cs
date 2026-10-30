@@ -15,9 +15,9 @@ internal static class WindowTools
 
         if (!Native.SetTopmost(target, on))
         {
-            ResultCard.Near(at, "Değiştirilemedi", "Bu pencere yönetici olarak çalışıyor olabilir.").ShowToast(2400);
+            ResultCard.Near(at, T("Değiştirilemedi", "Couldn't change it"), T("Bu pencere yönetici olarak çalışıyor olabilir.", "This window may be running as administrator.")).ShowToast(2400);
             return;
         }
-        ResultCard.Near(at, on ? "Üstte tutuluyor" : "Artık üstte değil", title).ShowToast();
+        ResultCard.Near(at, on ? T("Üstte tutuluyor", "Kept on top") : T("Artık üstte değil", "No longer on top"), title).ShowToast();
     }
 }

@@ -25,21 +25,21 @@ internal sealed class AnnotateWindow : Window
 
     private static readonly (Tool Tool, string Label)[] ToolNames =
     [
-        (Tool.Arrow, "Ok"), (Tool.Line, "Çizgi"), (Tool.Box, "Kutu"), (Tool.Ellipse, "Elips"), (Tool.Pen, "Kalem"),
-        (Tool.Marker, "Fosforlu"), (Tool.Number, "Numara"), (Tool.Blur, "Bulanık"), (Tool.Text, "Metin"), (Tool.Crop, "Kırp"),
+        (Tool.Arrow, T("Ok", "Arrow")), (Tool.Line, T("Çizgi", "Line")), (Tool.Box, T("Kutu", "Box")), (Tool.Ellipse, T("Elips", "Ellipse")), (Tool.Pen, T("Kalem", "Pen")),
+        (Tool.Marker, T("Fosforlu", "Marker")), (Tool.Number, T("Numara", "Number")), (Tool.Blur, T("Bulanık", "Blur")), (Tool.Text, T("Metin", "Text")), (Tool.Crop, T("Kırp", "Crop")),
     ];
 
-    private static readonly (string Label, double Scale)[] Sizes = [("İnce", 0.5), ("Orta", 1), ("Kalın", 2), ("Çok kalın", 3.5)];
+    private static readonly (string Label, double Scale)[] Sizes = [(T("İnce", "Thin"), 0.5), (T("Orta", "Medium"), 1), (T("Kalın", "Thick"), 2), (T("Çok kalın", "Extra thick"), 3.5)];
 
     private static readonly (string Label, Color Color)[] Colors =
     [
-        ("Kırmızı", Color.FromRgb(0xE5, 0x39, 0x35)), ("Sarı", Color.FromRgb(0xFD, 0xD8, 0x35)),
-        ("Mavi", Color.FromRgb(0x1E, 0x88, 0xE5)), ("Yeşil", Color.FromRgb(0x43, 0xA0, 0x47)),
-        ("Turuncu", Color.FromRgb(0xFB, 0x8C, 0x00)), ("Mor", Color.FromRgb(0x8E, 0x24, 0xAA)),
-        ("Pembe", Color.FromRgb(0xEC, 0x40, 0x7A)), ("Beyaz", Colors_.White), ("Siyah", Colors_.Black),
+        (T("Kırmızı", "Red"), Color.FromRgb(0xE5, 0x39, 0x35)), (T("Sarı", "Yellow"), Color.FromRgb(0xFD, 0xD8, 0x35)),
+        (T("Mavi", "Blue"), Color.FromRgb(0x1E, 0x88, 0xE5)), (T("Yeşil", "Green"), Color.FromRgb(0x43, 0xA0, 0x47)),
+        (T("Turuncu", "Orange"), Color.FromRgb(0xFB, 0x8C, 0x00)), (T("Mor", "Purple"), Color.FromRgb(0x8E, 0x24, 0xAA)),
+        (T("Pembe", "Pink"), Color.FromRgb(0xEC, 0x40, 0x7A)), (T("Beyaz", "White"), Colors_.White), (T("Siyah", "Black"), Colors_.Black),
     ];
 
-    private static readonly (string Label, double Ratio)[] Ratios = [("Serbest", 0), ("1:1", 1), ("4:3", 4.0 / 3), ("16:9", 16.0 / 9), ("9:16", 9.0 / 16)];
+    private static readonly (string Label, double Ratio)[] Ratios = [(T("Serbest", "Free"), 0), ("1:1", 1), ("4:3", 4.0 / 3), ("16:9", 16.0 / 9), ("9:16", 9.0 / 16)];
 
     private readonly BitmapSource _image;
     private readonly string? _source;
@@ -50,7 +50,7 @@ internal sealed class AnnotateWindow : Window
     private readonly Stack<UIElement> _redo = new();
     private readonly List<ToggleButton> _toolButtons = [];
     private readonly List<Button> _swatches = [];
-    private readonly ComboBox _sizeBox = new() { Width = 96, Focusable = false, ToolTip = "Kalınlık ( [ ve ] )" };
+    private readonly ComboBox _sizeBox = new() { Width = 96, Focusable = false, ToolTip = T("Kalınlık ( [ ve ] )", "Thickness ( [ and ] )") };
     private readonly double _stroke;
     private Tool _tool = Tool.Arrow;
     private Color _color = Colors[0].Color;
@@ -85,7 +85,7 @@ internal sealed class AnnotateWindow : Window
         _source = source;
         _image = image;
         _stroke = Math.Max(2, Math.Max(image.PixelWidth, image.PixelHeight) / 300.0);
-        Title = source is null ? "Not ekle" : $"Not ekle · {IOPath.GetFileName(source)}";
+        Title = source is null ? T("Not ekle", "Annotate") : $"{T("Not ekle", "Annotate")} · {IOPath.GetFileName(source)}";
         Background = Palette.Surface;
         FontFamily = new FontFamily("Segoe UI Variable Text, Segoe UI");
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
@@ -145,15 +145,15 @@ internal sealed class AnnotateWindow : Window
         bar.Children.Add(_sizeBox);
 
         bar.Children.Add(new Border { Width = 12 });
-        var ratio = new ComboBox { Width = 90, Focusable = false, ItemsSource = Ratios.Select(r => r.Label).ToList(), SelectedIndex = 0, ToolTip = "Kırpma oranı" };
+        var ratio = new ComboBox { Width = 90, Focusable = false, ItemsSource = Ratios.Select(r => r.Label).ToList(), SelectedIndex = 0, ToolTip = T("Kırpma oranı", "Crop ratio") };
         ratio.SelectionChanged += (_, _) => _ratio = Ratios[Math.Max(0, ratio.SelectedIndex)].Ratio;
         bar.Children.Add(ratio);
 
         bar.Children.Add(new Border { Width = 12 });
-        bar.Children.Add(Action("Geri al", Undo));
-        bar.Children.Add(Action("Yinele", Redo));
-        bar.Children.Add(Action("Kopyala", () => Copy(Render())));
-        bar.Children.Add(Action("Kaydet", Save, primary: true));
+        bar.Children.Add(Action(T("Geri al", "Undo"), Undo));
+        bar.Children.Add(Action(T("Yinele", "Redo"), Redo));
+        bar.Children.Add(Action(T("Kopyala", "Copy"), () => Copy(Render())));
+        bar.Children.Add(Action(T("Kaydet", "Save"), Save, primary: true));
         return bar;
     }
 
@@ -493,21 +493,21 @@ internal sealed class AnnotateWindow : Window
         string file;
         if (_source is not null)
         {
-            file = FileJobs.OutputFor(_source, " (not)", "png");
+            file = FileJobs.OutputFor(_source, T(" (not)", " (annotated)"), "png");
             ImageIO.Save(image, file);
             ToolRunner.Remember("annotate", file);
         }
         else
         {
-            file = ToolRunner.Save(image, "Not");
+            file = ToolRunner.Save(image, T("Not", "Annotation"));
         }
         Copy(image);
         var anchor = new Int32Rect((int)Left, (int)Top, (int)ActualWidth, (int)ActualHeight);
         Close();
-        ResultCard.ForImage("Kaydedildi ve kopyalandı", IOPath.GetFileName(file), image, anchor)
-            .WithButton("Sil", () => ToolRunner.ConfirmDelete([file], anchor))
-            .WithButton("Klasörde göster", () => ToolRunner.ShowInFolder(file))
-            .WithButton("Tamam", () => { }, primary: true)
+        ResultCard.ForImage(T("Kaydedildi ve kopyalandı", "Saved and copied"), IOPath.GetFileName(file), image, anchor)
+            .WithButton(T("Sil", "Delete"), () => ToolRunner.ConfirmDelete([file], anchor))
+            .WithButton(T("Klasörde göster", "Show in folder"), () => ToolRunner.ShowInFolder(file))
+            .WithButton(T("Tamam", "OK"), () => { }, primary: true)
             .ShowNear();
     }
 

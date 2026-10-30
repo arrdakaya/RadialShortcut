@@ -22,6 +22,9 @@ public sealed class UserSettings
     /// <summary>"system", "light" or "dark".</summary>
     public string Theme { get; set; } = "system";
 
+    /// <summary>Interface language: "system", "tr" or "en"; see <see cref="Loc"/>.</summary>
+    public string Language { get; set; } = "system";
+
     /// <summary>Ring size relative to the default, 0.8–1.4.</summary>
     public double RingScale { get; set; } = 1;
 
@@ -73,7 +76,7 @@ public sealed class UserSettings
         catch (JsonException e)
         {
             // A hand-edited file with a typo must not stop the app.
-            error = e.LineNumber is { } line ? $"{line + 1}. satırda hata: {e.Message}" : e.Message;
+            error = e.LineNumber is { } line ? Loc.T($"{line + 1}. satırda hata: {e.Message}", $"Error on line {line + 1}: {e.Message}") : e.Message;
             return false;
         }
         catch (IOException e)

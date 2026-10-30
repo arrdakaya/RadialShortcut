@@ -19,12 +19,12 @@ internal static partial class Downloader
         ToolRunner.Retry(() => url = Clipboard.ContainsText() ? Clipboard.GetText().Trim() : null);
         if (url is null || !Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https"))
         {
-            ResultCard.ForMessage("Linkten indir", "Önce bir video ya da ses linki kopyala (YouTube, X, Instagram, ...).", anchor).ShowNear();
+            ResultCard.ForMessage(T("Linkten indir", "Download link"), T("Önce bir video ya da ses linki kopyala (YouTube, X, Instagram, ...).", "Copy a video or audio link first (YouTube, X, Instagram, ...)."), anchor).ShowNear();
             return;
         }
 
-        var pick = await ResultCard.ChooseAsync("Linkten indir", Shorten(url), ["Video", "Sadece ses (MP3)"], anchor);
-        if (pick < 0 || !await WebTools.ConsentAsync("download", "Linkten indir", "Link yt-dlp ile açılıp medya indirilecek.", anchor))
+        var pick = await ResultCard.ChooseAsync(T("Linkten indir", "Download link"), Shorten(url), ["Video", T("Sadece ses (MP3)", "Audio only (MP3)")], anchor);
+        if (pick < 0 || !await WebTools.ConsentAsync("download", T("Linkten indir", "Download link"), T("Link yt-dlp ile açılıp medya indirilecek.", "The link is opened with yt-dlp and the media downloaded."), anchor))
             return;
         if (!await ToolDeps.EnsureAsync(anchor, ToolDeps.YtDlp, ToolDeps.Ffmpeg))
             return;
@@ -34,7 +34,7 @@ internal static partial class Downloader
         string[] format = pick == 0
             ? ["-f", "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bv*+ba/b", "--merge-output-format", "mp4"]
             : ["-x", "--audio-format", "mp3", "--audio-quality", "0"];
-        await FileJobs.RunAsync("download", "İndiriliyor", [url], anchor, (link, progress, cancel) => DownloadAsync(link, format, progress, cancel));
+        await FileJobs.RunAsync("download", T("İndiriliyor", "Downloading"), [url], anchor, (link, progress, cancel) => DownloadAsync(link, format, progress, cancel));
     }
 
     private static async Task<string?> DownloadAsync(string url, string[] format, Action<double> progress, CancellationToken cancel)
@@ -73,7 +73,7 @@ internal static partial class Downloader
         if (process.ExitCode != 0 || file is null)
         {
             var last = (await errors).Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).LastOrDefault(l => l.Contains("ERROR"));
-            throw new InvalidOperationException(last?.Replace("ERROR: ", "") ?? "yt-dlp indiremedi.");
+            throw new InvalidOperationException(last?.Replace("ERROR: ", "") ?? T("yt-dlp indiremedi.", "yt-dlp couldn't download it."));
         }
         return file;
     }

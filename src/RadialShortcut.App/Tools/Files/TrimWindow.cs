@@ -29,12 +29,12 @@ internal sealed class TrimWindow : Window
 
     public static async Task RunAsync(IntPtr target, Int32Rect anchor)
     {
-        var files = await SelectedFiles.GetAsync(target, "Kırpılacak videoyu seç", SelectedFiles.Videos);
+        var files = await SelectedFiles.GetAsync(target, T("Kırpılacak videoyu seç", "Choose a video to trim"), SelectedFiles.Videos);
         var video = files.FirstOrDefault(f => MediaKinds.Of(f) is MediaKind.Video or MediaKind.Audio);
         if (video is null)
         {
             if (files.Count > 0)
-                ResultCard.ForMessage("Video kırp", "Seçilen dosya bir video değil.", anchor).ShowNear();
+                ResultCard.ForMessage(T("Video kırp", "Trim video"), T("Seçilen dosya bir video değil.", "The selected file is not a video."), anchor).ShowNear();
             return;
         }
         Open(video);
@@ -45,7 +45,7 @@ internal sealed class TrimWindow : Window
     private TrimWindow(string file)
     {
         _file = file;
-        Title = $"Video kırp · {Path.GetFileName(file)}";
+        Title = $"{T("Video kırp", "Trim video")} · {Path.GetFileName(file)}";
         Width = 900;
         Height = 620;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
@@ -54,10 +54,10 @@ internal sealed class TrimWindow : Window
 
         _range.Children.Add(_selected);
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
-        buttons.Children.Add(Button("Başlangıç (I)", MarkIn));
-        buttons.Children.Add(Button("Bitiş (O)", MarkOut));
-        buttons.Children.Add(Button("Hızlı kaydet", () => _ = SaveAsync(exact: false)));
-        buttons.Children.Add(Button("Kaydet (Enter)", () => _ = SaveAsync(exact: true), primary: true));
+        buttons.Children.Add(Button(T("Başlangıç (I)", "Start (I)"), MarkIn));
+        buttons.Children.Add(Button(T("Bitiş (O)", "End (O)"), MarkOut));
+        buttons.Children.Add(Button(T("Hızlı kaydet", "Quick save"), () => _ = SaveAsync(exact: false)));
+        buttons.Children.Add(Button(T("Kaydet (Enter)", "Save (Enter)"), () => _ = SaveAsync(exact: true), primary: true));
 
         var bottom = new DockPanel { Margin = new Thickness(0, 10, 0, 0) };
         DockPanel.SetDock(buttons, Dock.Right);
@@ -82,7 +82,7 @@ internal sealed class TrimWindow : Window
             _player.Pause();
             Update();
         };
-        _player.MediaFailed += (_, e) => _info.Text = $"Oynatılamadı: {e.ErrorException?.Message}. Yine de I/O ile süre seçip kaydedebilirsin.";
+        _player.MediaFailed += (_, e) => _info.Text = T($"Oynatılamadı: {e.ErrorException?.Message}. Yine de I/O ile süre seçip kaydedebilirsin.", $"Can't play it: {e.ErrorException?.Message}. You can still mark a range with I/O and save.");
         _player.MediaEnded += (_, _) => { _player.Pause(); _playing = false; };
         _player.Source = new Uri(file);
         _player.Play();
@@ -221,7 +221,7 @@ internal sealed class TrimWindow : Window
         Canvas.SetLeft(_selected, w * _in.TotalSeconds / _length.TotalSeconds);
         _selected.Width = Math.Max(1, w * (_out - _in).TotalSeconds / _length.TotalSeconds);
         var now = _dragging ? TimeSpan.FromSeconds(_position.Value) : _player.Position;
-        _info.Text = $"{Format(now)} / {Format(_length)}   ·   seçim {Format(_in)} – {Format(_out)} ({Format(_out - _in)})   ·   Space oynat, ← → sar";
+        _info.Text = T($"{Format(now)} / {Format(_length)}   ·   seçim {Format(_in)} – {Format(_out)} ({Format(_out - _in)})   ·   Space oynat, ← → sar", $"{Format(now)} / {Format(_length)}   ·   selection {Format(_in)} – {Format(_out)} ({Format(_out - _in)})   ·   Space play, ← → seek");
     }
 
     private static string Format(TimeSpan t) => t.TotalHours >= 1 ? t.ToString(@"h\:mm\:ss\.f") : t.ToString(@"mm\:ss\.f");
@@ -234,7 +234,7 @@ internal sealed class TrimWindow : Window
     {
         if (_out - _in < TimeSpan.FromSeconds(0.2))
         {
-            _info.Text = "Seçim çok kısa: önce başlangıç (I) ve bitiş (O) işaretle.";
+            _info.Text = T("Seçim çok kısa: önce başlangıç (I) ve bitiş (O) işaretle.", "Selection too short: mark the start (I) and end (O) first.");
             return;
         }
         var anchor = new Int32Rect((int)Left, (int)Top, (int)ActualWidth, 1);
@@ -251,9 +251,9 @@ internal sealed class TrimWindow : Window
         var file = _file;
         var length = _out - _in;
         Close();
-        await FileJobs.RunAsync("trim", "Kırpılıyor", [file], anchor, async (input, progress, cancel) =>
+        await FileJobs.RunAsync("trim", T("Kırpılıyor", "Trimming"), [file], anchor, async (input, progress, cancel) =>
         {
-            var output = FileJobs.OutputFor(input, " (kırpılmış)", ext);
+            var output = FileJobs.OutputFor(input, T(" (kırpılmış)", " (trimmed)"), ext);
             await Ffmpeg.RunAsync(input, args, output, progress, cancel, before: seek, length: length);
             return output;
         });

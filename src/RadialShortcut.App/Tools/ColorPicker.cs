@@ -10,7 +10,7 @@ using RadialShortcut.Core;
 namespace RadialShortcut.App.Tools;
 
 /// <summary>
-/// Screen color picker (PLAN.md, section 7): an 8× magnifier next to the cursor with the live value.
+/// Screen color picker: an 8× magnifier next to the cursor with the live value.
 /// Click copies, Tab cycles HEX / RGB / HSL, holding Shift shows recent colors, Esc cancels.
 /// </summary>
 internal static class ColorPicker
@@ -46,10 +46,10 @@ internal static class ColorPicker
         });
 
         var anchor = new Int32Rect(picked.ScreenX, picked.ScreenY, 1, 1);
-        var card = ResultCard.ForContent($"{value} panoya kopyalandı", null, body, anchor);
+        var card = ResultCard.ForContent(T($"{value} panoya kopyalandı", $"{value} copied"), null, body, anchor);
         foreach (var n in Enum.GetValues<ColorNotation>().Where(n => n != _notation))
             card.WithButton(n.ToString().ToUpperInvariant(), () => ToolRunner.CopyText(Format(n, c)));
-        card.WithButton("Tamam", () => { }, primary: true).ShowNear();
+        card.WithButton(T("Tamam", "OK"), () => { }, primary: true).ShowNear();
     }
 
     private static string Format(ColorNotation n, Color c) => ColorFormat.Format(n, c.R, c.G, c.B);
@@ -95,7 +95,7 @@ internal static class ColorPicker
                     {
                         lens,
                         row,
-                        new TextBlock { Text = "Tık: kopyala · Tab: format · Shift: son renkler", Foreground = Brushes.Gray, FontSize = 10, Margin = new Thickness(0, 4, 0, 0) },
+                        new TextBlock { Text = T("Tık: kopyala · Tab: format · Shift: son renkler", "Click: copy · Tab: format · Shift: recent colors"), Foreground = Brushes.Gray, FontSize = 10, Margin = new Thickness(0, 4, 0, 0) },
                         _recent,
                     },
                 },
@@ -168,7 +168,7 @@ internal static class ColorPicker
         {
             _recent.Children.Clear();
             if (show && Recent.Count == 0)
-                _recent.Children.Add(new TextBlock { Text = "Henüz renk yok", Foreground = Brushes.Gray, FontSize = 11 });
+                _recent.Children.Add(new TextBlock { Text = T("Henüz renk yok", "No colors yet"), Foreground = Brushes.Gray, FontSize = 11 });
             foreach (var c in show ? Recent : [])
             {
                 _recent.Children.Add(new StackPanel

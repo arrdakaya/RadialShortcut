@@ -39,11 +39,11 @@ internal sealed class SettingsWindow : Window
 
     private static readonly (string Type, string Name, string Icon)[] SliceTypes =
     [
-        ("tool", "Araç", ToolIcon),
-        ("launch", "Uygulama aç", AppIcon),
-        ("url", "Web adresi", GlobeIcon),
-        ("hotkey", "Kısayol tuşu", "M3 7h18v10H3z M6 10h1 M9 10h1 M12 10h1 M15 10h1 M18 10h1 M8 14h8"),
-        ("text", "Metin yapıştır", "M5 6h14 M5 10h14 M5 14h9 M5 18h6"),
+        ("tool", T("Araç", "Tool"), ToolIcon),
+        ("launch", T("Uygulama aç", "Open app"), AppIcon),
+        ("url", T("Web adresi", "Web address"), GlobeIcon),
+        ("hotkey", T("Kısayol tuşu", "Shortcut"), "M3 7h18v10H3z M6 10h1 M9 10h1 M12 10h1 M15 10h1 M18 10h1 M8 14h8"),
+        ("text", T("Metin yapıştır", "Paste text"), "M5 6h14 M5 10h14 M5 14h9 M5 18h6"),
     ];
     private static readonly double[] Scales = [0.85, 1, 1.15, 1.3];
     private static readonly string[] Accents = ["#3D8BFF", "#8B5CF6", "#EC4899", "#EF4444", "#F59E0B", "#22C55E", "#14B8A6"];
@@ -90,14 +90,15 @@ internal sealed class SettingsWindow : Window
 
     // Genel
     private readonly ChordBox _ringHotkey = new(minKeys: 2);
-    private readonly Segmented _theme = new("Sistem", "Açık", "Koyu");
+    private readonly Segmented _theme = new(T("Sistem", "System"), T("Açık", "Light"), T("Koyu", "Dark"));
+    private readonly Segmented _language = new(T("Sistem", "System"), "Türkçe", "English");
     private readonly Toggle _startup = new();
     private readonly List<string> _excluded = [];
     private readonly WrapPanel _excludedChips = new() { Margin = new Thickness(0, 10, 0, 0) };
     private readonly TextBlock _updateStatus = Small("");
     private static readonly string[] Languages = ["TR", "EN", "DE", "FR", "ES"];
-    private readonly Segmented _translateTarget = new("Türkçe", "İngilizce", "Almanca", "Fransızca", "İspanyolca");
-    private readonly Input _deepLKey = new("Boş: ücretsiz Google çevirisi kullanılır");
+    private readonly Segmented _translateTarget = new(T("Türkçe", "Turkish"), T("İngilizce", "English"), T("Almanca", "German"), T("Fransızca", "French"), T("İspanyolca", "Spanish"));
+    private readonly Input _deepLKey = new(T("Boş: ücretsiz Google çevirisi kullanılır", "Empty: free Google Translate is used"));
 
     // Halkalar
     private int _ringIndex = -1, _slice = -1;
@@ -110,13 +111,13 @@ internal sealed class SettingsWindow : Window
     private FrameworkElement? _previewRoot;
     private readonly DispatcherTimer _previewTimer = new() { Interval = TimeSpan.FromMilliseconds(140) };
 
-    private readonly Input _ringName = new("Halkanın adı");
-    private readonly Segmented _ringLayer = new("Sağ tuş", "Shift ile", "Ctrl ile");
+    private readonly Input _ringName = new(T("Halkanın adı", "Ring name"));
+    private readonly Segmented _ringLayer = new(T("Sağ tuş", "Right button"), T("Shift ile", "With Shift"), T("Ctrl ile", "With Ctrl"));
     private static readonly string[] LayerOrder = [RingLayers.Main, RingLayers.Files, RingLayers.Apps];
-    private readonly Segmented _ringWhere = new("Her yerde", "Belirli uygulamada");
+    private readonly Segmented _ringWhere = new(T("Her yerde", "Everywhere"), T("Belirli uygulamada", "In one app"));
     private readonly StackPanel _matchPanel = new();
-    private readonly Input _ringProcess = new("örn. chrome");
-    private readonly Input _ringTitle = new("İsteğe bağlı, örn. YouTube");
+    private readonly Input _ringProcess = new(T("örn. chrome", "e.g. chrome"));
+    private readonly Input _ringTitle = new(T("İsteğe bağlı, örn. YouTube", "Optional, e.g. YouTube"));
 
     private readonly TextBlock _sliceHeader = new() { FontWeight = FontWeights.SemiBold, FontSize = 14, VerticalAlignment = VerticalAlignment.Center };
     private readonly StackPanel _sliceEditor = new();
@@ -126,7 +127,7 @@ internal sealed class SettingsWindow : Window
     private readonly Input _sliceLabel = new("");
     private readonly Border _iconPreview = new() { Width = 38, Height = 38, CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Margin = new Thickness(0, 0, 10, 0) };
     private readonly Popup _iconPopup = new() { StaysOpen = false, Placement = PlacementMode.Bottom, AllowsTransparency = true };
-    private readonly Segmented _ringScale = new("Küçük", "Normal", "Büyük", "Çok büyük");
+    private readonly Segmented _ringScale = new(T("Küçük", "Small"), "Normal", T("Büyük", "Large"), T("Çok büyük", "Extra large"));
     private readonly List<(Pill Pill, string Color)> _swatches = [];
     private readonly TextBlock _valueCaption = Caption("");
     private readonly Input _sliceValue = new("");
@@ -160,16 +161,16 @@ internal sealed class SettingsWindow : Window
         _hotkey = hotkey;
         _checkUpdate = checkUpdate;
         _installUpdate = installUpdate;
-        _install = TextButton("Güncelle", InstallUpdate, Kind.Primary);
+        _install = TextButton(T("Güncelle", "Update"), InstallUpdate, Kind.Primary);
         _install.Visibility = Visibility.Collapsed;
         _install.Margin = new Thickness(0, 0, 8, 0);
         var loaded = UserSettings.TryLoad(AppPaths.ConfigFile, out var settings, out var error);
         _settings = settings.Clone();
         AddBuiltInRings();
-        _browse = TextButton("Gözat…", Browse, Kind.Secondary);
-        _pickApp = TextButton("Uygulamalardan seç…", PickApp, Kind.Secondary);
+        _browse = TextButton(T("Gözat…", "Browse…"), Browse, Kind.Secondary);
+        _pickApp = TextButton(T("Uygulamalardan seç…", "Choose from apps…"), PickApp, Kind.Secondary);
 
-        Title = "RadialShortcut Ayarları";
+        Title = T("RadialShortcut Ayarları", "RadialShortcut Settings");
         Width = Math.Min(1300, SystemParameters.WorkArea.Width - 40);
         Height = Math.Min(820, SystemParameters.WorkArea.Height - 40);
         MinWidth = 960;
@@ -216,7 +217,7 @@ internal sealed class SettingsWindow : Window
         };
 
         if (!loaded)
-            Say($"config.json okunamadı ({error}). Kaydedersen yerine bu ayarlar yazılır; eskisi config.json.bak olarak kalır.", problem: true);
+            Say(T($"config.json okunamadı ({error}). Kaydedersen yerine bu ayarlar yazılır; eskisi config.json.bak olarak kalır.", $"Couldn't read config.json ({error}). Saving writes these settings in its place; the old file stays as config.json.bak."), problem: true);
     }
 
 #if DEBUG
@@ -249,11 +250,11 @@ internal sealed class SettingsWindow : Window
     {
         bool HasGlobal(string layer) => _settings.Rings.Any(r => r.Match is null && LayerOf(r) == layer);
         if (!HasGlobal(RingLayers.Apps))
-            _settings.Rings.Insert(0, new RingConfig { Id = NewId("uygulama"), Name = "Uygulamalar", Layer = RingLayers.Apps, Slices = DefaultAppRing.Slices() });
+            _settings.Rings.Insert(0, new RingConfig { Id = NewId("uygulama"), Name = T("Uygulamalar", "Apps"), Layer = RingLayers.Apps, Slices = DefaultAppRing.Slices() });
         if (!HasGlobal(RingLayers.Files))
-            _settings.Rings.Insert(0, new RingConfig { Id = NewId("dosya"), Name = "Dosya", Layer = RingLayers.Files, Slices = DefaultFileRing.Items.Select(i => new SliceConfig { Tool = i.Id }).ToList() });
+            _settings.Rings.Insert(0, new RingConfig { Id = NewId("dosya"), Name = T("Dosya", "Files"), Layer = RingLayers.Files, Slices = DefaultFileRing.Items.Select(i => new SliceConfig { Tool = i.Id }).ToList() });
         if (!HasGlobal(RingLayers.Main))
-            _settings.Rings.Insert(0, new RingConfig { Id = NewId("genel"), Name = "Genel", Slices = DefaultRing.For(8).Select(i => new SliceConfig { Tool = i.Id }).ToList() });
+            _settings.Rings.Insert(0, new RingConfig { Id = NewId("genel"), Name = T("Genel", "General"), Slices = DefaultRing.For(8).Select(i => new SliceConfig { Tool = i.Id }).ToList() });
     }
 
     // ---- Çerçeve ----
@@ -264,11 +265,11 @@ internal sealed class SettingsWindow : Window
         head.Children.Add(new Image { Source = new BitmapImage(new Uri("pack://application:,,,/Assets/app.ico")), Width = 30, Height = 30, Margin = new Thickness(0, 0, 10, 0) });
         var name = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         name.Children.Add(new TextBlock { Text = "RadialShortcut", FontWeight = FontWeights.SemiBold, FontSize = 14 });
-        name.Children.Add(Small($"Ayarlar · v{Updater.Current.ToString(3)}"));
+        name.Children.Add(Small($"{T("Ayarlar", "Settings")} · v{Updater.Current.ToString(3)}"));
         head.Children.Add(name);
 
         var nav = new StackPanel { Margin = new Thickness(10, 0, 10, 0) };
-        foreach (var (i, label, icon) in new[] { (0, "Genel", GearIcon), (1, "Halkalar", RingIcon), (2, "Nasıl kullanılır", HelpIcon) })
+        foreach (var (i, label, icon) in new[] { (0, T("Genel", "General"), GearIcon), (1, T("Halkalar", "Rings"), RingIcon), (2, T("Nasıl kullanılır", "How to use"), HelpIcon) })
         {
             var shape = IconShape(icon, Palette.Muted);
             var text = new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, FontSize = 14 };
@@ -280,9 +281,9 @@ internal sealed class SettingsWindow : Window
             nav.Children.Add(pill);
         }
 
-        var folder = IconButton(FolderIcon, "Ayar klasörünü aç", () => ToolRunner.OpenUrl(AppPaths.ConfigDirectory), Kind.Ghost);
+        var folder = IconButton(FolderIcon, T("Ayar klasörünü aç", "Open settings folder"), () => ToolRunner.OpenUrl(AppPaths.ConfigDirectory), Kind.Ghost);
         folder.Margin = new Thickness(10, 0, 10, 16);
-        folder.ToolTip = "config.json'u elle düzenlemek için";
+        folder.ToolTip = T("config.json'u elle düzenlemek için", "To edit config.json by hand");
 
         var panel = new DockPanel { Background = SidebarBrush };
         DockPanel.SetDock(head, Dock.Top);
@@ -296,11 +297,11 @@ internal sealed class SettingsWindow : Window
     private FrameworkElement Footer()
     {
         var buttons = new StackPanel { Orientation = Orientation.Horizontal };
-        var revert = TextButton("Değişiklikleri geri al", Revert, Kind.Ghost);
+        var revert = TextButton(T("Değişiklikleri geri al", "Discard changes"), Revert, Kind.Ghost);
         revert.Margin = new Thickness(0, 0, 8, 0);
         buttons.Children.Add(revert);
-        buttons.Children.Add(TextButton("Kapat", Close, Kind.Secondary));
-        var save = TextButton("Kaydet", () => Save(), Kind.Primary);
+        buttons.Children.Add(TextButton(T("Kapat", "Close"), Close, Kind.Secondary));
+        var save = TextButton(T("Kaydet", "Save"), () => Save(), Kind.Primary);
         save.Margin = new Thickness(8, 0, 0, 0);
         buttons.Children.Add(save);
         var bar = new DockPanel { Margin = new Thickness(24, 12, 20, 12) };
@@ -319,10 +320,10 @@ internal sealed class SettingsWindow : Window
     {
         if (!_dirty)
         {
-            Say("Geri alınacak bir değişiklik yok.");
+            Say(T("Geri alınacak bir değişiklik yok.", "There are no changes to discard."));
             return;
         }
-        if (MessageBox.Show(this, "Kaydedilmemiş tüm değişiklikler silinsin mi?", "RadialShortcut Ayarları", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK)
+        if (MessageBox.Show(this, T("Kaydedilmemiş tüm değişiklikler silinsin mi?", "Discard all unsaved changes?"), Title, MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK)
             return;
 
         _dirty = false;
@@ -339,7 +340,7 @@ internal sealed class SettingsWindow : Window
         _open = fresh;
         fresh.Show();
         fresh.ShowPage(_pageIndex);
-        fresh.Say("Değişiklikler geri alındı.");
+        fresh.Say(T("Değişiklikler geri alındı.", "Changes discarded."));
         Close();
     }
 
@@ -371,7 +372,7 @@ internal sealed class SettingsWindow : Window
         if (_loading)
             return;
         _dirty = true;
-        Say("Kaydedilmemiş değişiklikler var.");
+        Say(T("Kaydedilmemiş değişiklikler var.", "You have unsaved changes."));
     }
 
     private void Say(string text, bool problem = false, bool done = false)
@@ -391,29 +392,29 @@ internal sealed class SettingsWindow : Window
     private FrameworkElement HelpPage()
     {
         var page = new StackPanel { MaxWidth = 720, Margin = new Thickness(36, 30, 36, 30), HorizontalAlignment = HorizontalAlignment.Left };
-        page.Children.Add(PageTitle("Nasıl kullanılır", "Halkalar, sürükleme araçları ve kısayollar."));
+        page.Children.Add(PageTitle(T("Nasıl kullanılır", "How to use"), T("Halkalar, sürükleme araçları ve kısayollar.", "Rings, drag tools and shortcuts.")));
 
-        page.Children.Add(Section("Halka",
-            Row("Aç ve seç", "Sağ tuşu basılı tut, fareyi bir dilime doğru çek ve bırak. Ortada bırakırsan hiçbir şey olmaz.", Keycaps("Sağ tuş")),
-            Row("Dosya halkası", "Explorer'da dosya seçiliyken kendiliğinden açılır. Halka açıkken Shift'i basılı tutunca da geçer.", Keycaps("Shift")),
-            Row("Uygulama halkası", "Halka açıkken Ctrl'i basılı tut. Ctrl + sağ tuşla doğrudan da açılır.", Keycaps("Ctrl")),
-            Row("Geri dönmek", "Shift ya da Ctrl'i bırakınca halka varsayılana döner.", Empty()),
-            Row("Touchpad", "Klavye kısayolunu basılı tut, imleçle dilime git, bırak. Kısayol Genel sayfasından değişir.", Keycaps(_settings.RingHotkey.Split('+')))));
+        page.Children.Add(Section(T("Halka", "The ring"),
+            Row(T("Aç ve seç", "Open and pick"), T("Sağ tuşu basılı tut, fareyi bir dilime doğru çek ve bırak. Ortada bırakırsan hiçbir şey olmaz.", "Hold the right button, move toward a slice and release. Release in the middle and nothing happens."), Keycaps(T("Sağ tuş", "Right button"))),
+            Row(T("Dosya halkası", "File ring"), T("Explorer'da dosya seçiliyken kendiliğinden açılır. Halka açıkken Shift'i basılı tutunca da geçer.", "Opens by itself when files are selected in Explorer. Holding Shift while the ring is open switches to it too."), Keycaps("Shift")),
+            Row(T("Uygulama halkası", "App ring"), T("Halka açıkken Ctrl'i basılı tut. Ctrl + sağ tuşla doğrudan da açılır.", "Hold Ctrl while the ring is open. Ctrl + right button opens it directly."), Keycaps("Ctrl")),
+            Row(T("Geri dönmek", "Going back"), T("Shift ya da Ctrl'i bırakınca halka varsayılana döner.", "Release Shift or Ctrl and the ring returns to the default."), Empty()),
+            Row("Touchpad", T("Klavye kısayolunu basılı tut, imleçle dilime git, bırak. Kısayol Genel sayfasından değişir.", "Hold the keyboard shortcut, move the pointer to a slice, release. Change the shortcut on the General page."), Keycaps(_settings.RingHotkey.Split('+')))));
 
-        page.Children.Add(Section("Dosya sürükleme",
-            Row("Araç şeridi", "Explorer'dan bir dosyayı sürüklerken imleci bir an sabit tut ya da Shift'e bas. Dosyaya uyan araçlar çıkar; dosyayı birinin üstüne bırak.", Keycaps("Bekle", "Shift")),
-            Row("Hangi araçlar", "Resim: dönüştür, sıkıştır, boyutlandır, not ekle, arka planı kaldır. Video: dönüştür, sıkıştır, boyutlandır, kırp. Ses: dönüştür, sıkıştır, kırp. PDF: dönüştür.", Empty())));
+        page.Children.Add(Section(T("Dosya sürükleme", "Dragging files"),
+            Row(T("Araç şeridi", "Tool strip"), T("Explorer'dan bir dosyayı sürüklerken imleci bir an sabit tut ya da Shift'e bas. Dosyaya uyan araçlar çıkar; dosyayı birinin üstüne bırak.", "While dragging a file from Explorer, hold the pointer still for a moment or press Shift. Tools that fit the file appear; drop it on one."), Keycaps(T("Bekle", "Pause"), "Shift")),
+            Row(T("Hangi araçlar", "Which tools"), T("Resim: dönüştür, sıkıştır, boyutlandır, not ekle, arka planı kaldır. Video: dönüştür, sıkıştır, boyutlandır, kırp. Ses: dönüştür, sıkıştır, kırp. PDF: dönüştür.", "Images: convert, compress, resize, annotate, remove background. Video: convert, compress, resize, trim. Audio: convert, compress, trim. PDF: convert."), Empty())));
 
-        page.Children.Add(Section("Not ekle",
-            Row("Araçlar", "Ok, çizgi, kutu, elips, kalem, fosforlu, numara, bulanık, metin, kırp. Rakam tuşları sırayla seçer.", Keycaps("1", "…", "0")),
-            Row("Kalınlık", "Üstteki listeden ya da köşeli parantezlerle.", Keycaps("[", "]")),
-            Row("Düz çizgi, kare", "Çizerken Shift: çizgi ve ok 45°'ye oturur, kutu ve elips kare kalır.", Keycaps("Shift")),
-            Row("Geri al, yinele", "", Keycaps("Ctrl", "Z / Y")),
-            Row("Kaydet ve kopyala", "Esc kapatır.", Keycaps("Enter"))));
+        page.Children.Add(Section(T("Not ekle", "Annotate"),
+            Row(T("Araçlar", "Tools"), T("Ok, çizgi, kutu, elips, kalem, fosforlu, numara, bulanık, metin, kırp. Rakam tuşları sırayla seçer.", "Arrow, line, box, ellipse, pen, marker, number, blur, text, crop. The number keys pick them in order."), Keycaps("1", "…", "0")),
+            Row(T("Kalınlık", "Thickness"), T("Üstteki listeden ya da köşeli parantezlerle.", "From the list at the top or with the square brackets."), Keycaps("[", "]")),
+            Row(T("Düz çizgi, kare", "Straight line, square"), T("Çizerken Shift: çizgi ve ok 45°'ye oturur, kutu ve elips kare kalır.", "Shift while drawing: lines and arrows snap to 45°, boxes and ellipses stay square."), Keycaps("Shift")),
+            Row(T("Geri al, yinele", "Undo, redo"), "", Keycaps("Ctrl", "Z / Y")),
+            Row(T("Kaydet ve kopyala", "Save and copy"), T("Esc kapatır.", "Esc closes."), Keycaps("Enter"))));
 
-        page.Children.Add(Section("Tepsi ve ayarlar",
-            Row("Tepsi simgesi", "Tıkla: bu pencere. Sağ tık: menü, güncellemeleri denetle, çıkış.", Empty()),
-            Row("Halkaları düzenle", "Halkalar sayfasında dilim ekle, taşı, sil. \"Uygulamalardan seç…\" kurulu uygulamaları listeler. Bitince Kaydet'e bas.", Empty())));
+        page.Children.Add(Section(T("Tepsi ve ayarlar", "Tray and settings"),
+            Row(T("Tepsi simgesi", "Tray icon"), T("Tıkla: bu pencere. Sağ tık: menü, güncellemeleri denetle, çıkış.", "Click: this window. Right-click: menu, check for updates, exit."), Empty()),
+            Row(T("Halkaları düzenle", "Edit rings"), T("Halkalar sayfasında dilim ekle, taşı, sil. \"Uygulamalardan seç…\" kurulu uygulamaları listeler. Bitince Kaydet'e bas.", "Add, move and delete slices on the Rings page. \"Choose from apps…\" lists installed apps. Press Save when done."), Empty())));
         return Scroll(page);
     }
 
@@ -422,26 +423,27 @@ internal sealed class SettingsWindow : Window
     private FrameworkElement GeneralPage()
     {
         var page = new StackPanel { MaxWidth = 720, Margin = new Thickness(36, 30, 36, 30), HorizontalAlignment = HorizontalAlignment.Left };
-        page.Children.Add(PageTitle("Genel", "Halkanın nasıl açılacağı ve uygulamanın davranışı."));
+        page.Children.Add(PageTitle(T("Genel", "General"), T("Halkanın nasıl açılacağı ve uygulamanın davranışı.", "How the ring opens and how the app behaves.")));
 
-        page.Children.Add(Section("Halkayı açma",
-            Row("Sağ tuş", "Sağ tuşu basılı tut, fareyi bir dilime doğru çek, bırak.", Keycaps("Sağ tuş")),
-            Row("Dosya halkası", "Explorer'da dosya seçiliyken kendiliğinden açılır; başka yerde Shift ile.", Keycaps("Shift", "Sağ tuş")),
-            Row("Uygulama halkası", "Sık açtığın uygulamalar. Halka açıkken Ctrl'e basınca da geçer.", Keycaps("Ctrl", "Sağ tuş")),
-            Row("Klavye kısayolu", "Touchpad için. Basılı tut, imleçle dilime git, bırak. Shift eklersen dosya halkası açılır. Değiştirmek için kutuya tıkla.", _ringHotkey)));
+        page.Children.Add(Section(T("Halkayı açma", "Opening the ring"),
+            Row(T("Sağ tuş", "Right button"), T("Sağ tuşu basılı tut, fareyi bir dilime doğru çek, bırak.", "Hold the right button, move toward a slice, release."), Keycaps(T("Sağ tuş", "Right button"))),
+            Row(T("Dosya halkası", "File ring"), T("Explorer'da dosya seçiliyken kendiliğinden açılır; başka yerde Shift ile.", "Opens by itself when files are selected in Explorer; elsewhere with Shift."), Keycaps("Shift", T("Sağ tuş", "Right button"))),
+            Row(T("Uygulama halkası", "App ring"), T("Sık açtığın uygulamalar. Halka açıkken Ctrl'e basınca da geçer.", "The apps you open most. Pressing Ctrl while the ring is open switches to it too."), Keycaps("Ctrl", T("Sağ tuş", "Right button"))),
+            Row(T("Klavye kısayolu", "Keyboard shortcut"), T("Touchpad için. Basılı tut, imleçle dilime git, bırak. Shift eklersen dosya halkası açılır. Değiştirmek için kutuya tıkla.", "For touchpads. Hold it, move the pointer to a slice, release. Add Shift for the file ring. Click the box to change it."), _ringHotkey)));
 
-        page.Children.Add(Section("Görünüm",
-            Row("Tema", "Sonuç kartları, araç pencereleri ve bu pencere. Yeni açılan pencerelere uygulanır.", _theme)));
+        page.Children.Add(Section(T("Görünüm", "Appearance"),
+            Row(T("Tema", "Theme"), T("Sonuç kartları, araç pencereleri ve bu pencere. Yeni açılan pencerelere uygulanır.", "Result cards, tool windows and this window. Applies to newly opened windows."), _theme),
+            Row(T("Dil", "Language"), T("Uygulamanın dili. Kaydedince uygulama yeniden başlar.", "The app's language. The app restarts when you save."), _language)));
 
-        page.Children.Add(Section("Başlangıç",
-            Row("Windows ile başlat", "Oturum açınca tepside sessizce başlar.", _startup)));
+        page.Children.Add(Section(T("Başlangıç", "Startup"),
+            Row(T("Windows ile başlat", "Start with Windows"), T("Oturum açınca tepside sessizce başlar.", "Starts quietly in the tray when you sign in."), _startup)));
 
         _deepLKey.MinWidth = 300;
-        page.Children.Add(Section("Çeviri",
-            Row("Hedef dil", "\"Çevir\" aracı metni bu dile çevirir.", _translateTarget),
-            Row("DeepL API anahtarı", "İsteğe bağlı; daha iyi çeviri için. Ücretsiz anahtarlar \":fx\" ile biter.", _deepLKey)));
+        page.Children.Add(Section(T("Çeviri", "Translation"),
+            Row(T("Hedef dil", "Target language"), T("\"Çevir\" aracı metni bu dile çevirir.", "The \"Translate\" tool translates into this language."), _translateTarget),
+            Row(T("DeepL API anahtarı", "DeepL API key"), T("İsteğe bağlı; daha iyi çeviri için. Ücretsiz anahtarlar \":fx\" ile biter.", "Optional, for better translations. Free keys end in \":fx\"."), _deepLKey)));
 
-        var add = new Input("Uygulama adı, örn. mstsc");
+        var add = new Input(T("Uygulama adı, örn. mstsc", "App name, e.g. mstsc"));
         void AddExcluded()
         {
             var name = add.Text.Trim();
@@ -460,10 +462,10 @@ internal sealed class SettingsWindow : Window
         };
         var addRow = new DockPanel();
         var addButtons = new StackPanel { Orientation = Orientation.Horizontal };
-        var addButton = TextButton("Ekle", AddExcluded, Kind.Secondary);
+        var addButton = TextButton(T("Ekle", "Add"), AddExcluded, Kind.Secondary);
         addButton.Margin = new Thickness(8, 0, 0, 0);
         Pill? pick = null;
-        pick = TextButton("Açık uygulamalardan ▾", () => PickRunningApp(pick!, name =>
+        pick = TextButton(T("Açık uygulamalardan ▾", "From open apps ▾"), () => PickRunningApp(pick!, name =>
         {
             add.Text = name;
             AddExcluded();
@@ -475,19 +477,19 @@ internal sealed class SettingsWindow : Window
         addRow.Children.Add(addButtons);
         addRow.Children.Add(add);
         var excluded = new StackPanel { Margin = new Thickness(18, 16, 18, 16) };
-        excluded.Children.Add(Small("Bu uygulamalarda sağ tuşa hiç dokunulmaz (uzak masaüstü, oyunlar...). Tam ekran pencerelerde halka zaten açılmaz."));
+        excluded.Children.Add(Small(T("Bu uygulamalarda sağ tuşa hiç dokunulmaz (uzak masaüstü, oyunlar...). Tam ekran pencerelerde halka zaten açılmaz.", "The right button is left alone in these apps (remote desktop, games...). The ring never opens over full-screen windows anyway.")));
         excluded.Children.Add(_excludedChips);
         excluded.Children.Add(new Border { Height = 12 });
         excluded.Children.Add(addRow);
-        page.Children.Add(Section("Hariç uygulamalar", excluded));
+        page.Children.Add(Section(T("Hariç uygulamalar", "Excluded apps"), excluded));
 
-        var check = TextButton("Güncellemeleri denetle", CheckUpdate, Kind.Secondary);
+        var check = TextButton(T("Güncellemeleri denetle", "Check for updates"), CheckUpdate, Kind.Secondary);
         var buttons = new StackPanel { Orientation = Orientation.Horizontal };
         buttons.Children.Add(_install);
         buttons.Children.Add(check);
-        page.Children.Add(Section("Güncellemeler",
-            Row($"Sürüm {Updater.Current.ToString(3)}", "", buttons, _updateStatus)));
-        _updateStatus.Text = "Günde bir kez kendiliğinden denetlenir.";
+        page.Children.Add(Section(T("Güncellemeler", "Updates"),
+            Row($"{T("Sürüm", "Version")} {Updater.Current.ToString(3)}", "", buttons, _updateStatus)));
+        _updateStatus.Text = T("Günde bir kez kendiliğinden denetlenir.", "Checked automatically once a day.");
         // A release the tray already found shows its button straight away.
         CheckUpdate();
 
@@ -503,6 +505,9 @@ internal sealed class SettingsWindow : Window
 
         _theme.Select(Math.Max(0, Array.FindIndex(ThemeIds, t => t.Equals(_settings.Theme, StringComparison.OrdinalIgnoreCase))));
         _theme.Changed += _ => MarkDirty();
+
+        _language.Select(Math.Max(0, Array.IndexOf(Loc.Languages, _settings.Language?.Trim().ToLowerInvariant())));
+        _language.Changed += _ => MarkDirty();
 
         _startup.Set(StartupRegistration.IsEnabled());
         _startup.Changed += _ => MarkDirty();
@@ -531,7 +536,7 @@ internal sealed class SettingsWindow : Window
                 RefreshExcluded();
                 MarkDirty();
             })
-            { Padding = new Thickness(4), Margin = new Thickness(6, 0, -4, 0), CornerRadius = new CornerRadius(10), ToolTip = "Kaldır" };
+            { Padding = new Thickness(4), Margin = new Thickness(6, 0, -4, 0), CornerRadius = new CornerRadius(10), ToolTip = T("Kaldır", "Remove") };
             remove.Paint(Brushes.Transparent, HoverBrush);
             row.Children.Add(remove);
             _excludedChips.Children.Add(new Border
@@ -546,17 +551,17 @@ internal sealed class SettingsWindow : Window
             });
         }
         if (_excluded.Count == 0)
-            _excludedChips.Children.Add(Small("Liste boş: sağ tuş her uygulamada çalışır."));
+            _excludedChips.Children.Add(Small(T("Liste boş: sağ tuş her uygulamada çalışır.", "The list is empty: the right button works in every app.")));
     }
 
     private async void CheckUpdate()
     {
-        _updateStatus.Text = "Denetleniyor…";
+        _updateStatus.Text = T("Denetleniyor…", "Checking…");
         var found = await _checkUpdate();
         _install.Visibility = found ? Visibility.Visible : Visibility.Collapsed;
         _updateStatus.Text = found
-            ? "Yeni sürüm var. \"Güncelle\" ile kurabilirsin."
-            : "En son sürümü kullanıyorsun (ya da GitHub'a ulaşılamadı).";
+            ? T("Yeni sürüm var. \"Güncelle\" ile kurabilirsin.", "A new version is available. Install it with \"Update\".")
+            : T("En son sürümü kullanıyorsun (ya da GitHub'a ulaşılamadı).", "You're on the latest version (or GitHub couldn't be reached).");
     }
 
     /// <summary>Downloads and installs the waiting release; the app restarts itself when it is done.</summary>
@@ -565,14 +570,14 @@ internal sealed class SettingsWindow : Window
         // The app restarts at the end, and a shutdown cannot wait on the "save changes?" question.
         if (_dirty)
         {
-            _updateStatus.Text = "Önce değişiklikleri kaydet ya da geri al.";
+            _updateStatus.Text = T("Önce değişiklikleri kaydet ya da geri al.", "Save or discard your changes first.");
             return;
         }
         _install.IsEnabled = false;
         var error = await _installUpdate(text => _updateStatus.Text = text);
         if (error is not null)
         {
-            _updateStatus.Text = $"Güncellenemedi: {error}";
+            _updateStatus.Text = T($"Güncellenemedi: {error}", $"Update failed: {error}");
             _install.IsEnabled = true;
         }
     }
@@ -606,7 +611,7 @@ internal sealed class SettingsWindow : Window
             menu.Items.Add(item);
         }
         if (apps.Count == 0)
-            menu.Items.Add(new MenuItem { Header = "Açık pencere bulunamadı", IsEnabled = false });
+            menu.Items.Add(new MenuItem { Header = T("Açık pencere bulunamadı", "No open windows found"), IsEnabled = false });
         menu.IsOpen = true;
     }
 
@@ -625,12 +630,12 @@ internal sealed class SettingsWindow : Window
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(360) });
 
         // Left: the rings, grouped by how they open.
-        var newRing = IconButton(PlusIcon, "Yeni", AddRing, Kind.Secondary);
+        var newRing = IconButton(PlusIcon, T("Yeni", "New"), AddRing, Kind.Secondary);
         newRing.VerticalAlignment = VerticalAlignment.Center;
         var listHead = new DockPanel { Margin = new Thickness(16, 20, 12, 12) };
         DockPanel.SetDock(newRing, Dock.Right);
         listHead.Children.Add(newRing);
-        listHead.Children.Add(new TextBlock { Text = "Halkalar", FontSize = 16, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+        listHead.Children.Add(new TextBlock { Text = T("Halkalar", "Rings"), FontSize = 16, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
         var list = new DockPanel();
         DockPanel.SetDock(listHead, Dock.Top);
         list.Children.Add(listHead);
@@ -664,14 +669,14 @@ internal sealed class SettingsWindow : Window
             if (SliceUnder(e) is var at && at >= 0)
                 SelectSlice(at);
         };
-        var addSlice = IconButton(PlusIcon, "Dilim ekle", AddSlice, Kind.Secondary);
+        var addSlice = IconButton(PlusIcon, T("Dilim ekle", "Add slice"), AddSlice, Kind.Secondary);
         addSlice.VerticalAlignment = VerticalAlignment.Center;
         addSlice.Margin = new Thickness(16, 0, 0, 0);
         var under = new DockPanel { Margin = new Thickness(28, 12, 28, 20) };
         DockPanel.SetDock(addSlice, Dock.Right);
         under.Children.Add(addSlice);
         var tip = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        tip.Children.Add(Small("Bir dilime tıkla, sağda düzenle. Dilimler saat yönünde, en üstten başlar."));
+        tip.Children.Add(Small(T("Bir dilime tıkla, sağda düzenle. Dilimler saat yönünde, en üstten başlar.", "Click a slice to edit it on the right. Slices go clockwise from the top.")));
         tip.Children.Add(_sliceCount);
         under.Children.Add(tip);
         var middle = new DockPanel();
@@ -701,7 +706,7 @@ internal sealed class SettingsWindow : Window
     private FrameworkElement StyleBar()
     {
         var bar = new WrapPanel { Margin = new Thickness(0, 12, 0, 0) };
-        bar.Children.Add(new TextBlock { Text = "Tüm halkalar:", Foreground = Palette.Muted, FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) });
+        bar.Children.Add(new TextBlock { Text = T("Tüm halkalar:", "All rings:"), Foreground = Palette.Muted, FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) });
         bar.Children.Add(_ringScale);
         var colors = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(14, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
         foreach (var color in Accents)
@@ -714,7 +719,7 @@ internal sealed class SettingsWindow : Window
                 RebuildPreview(animate: false);
                 MarkDirty();
             })
-            { Padding = new Thickness(3), CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(2), Margin = new Thickness(0, 0, 3, 0), ToolTip = "Vurgu rengi" };
+            { Padding = new Thickness(3), CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(2), Margin = new Thickness(0, 0, 3, 0), ToolTip = T("Vurgu rengi", "Accent color") };
             _swatches.Add((swatch, color));
             colors.Children.Add(swatch);
         }
@@ -827,33 +832,33 @@ internal sealed class SettingsWindow : Window
     private FrameworkElement RingInspector()
     {
         var panel = new StackPanel { Margin = new Thickness(16) };
-        panel.Children.Add(Caption("Ad"));
+        panel.Children.Add(Caption(T("Ad", "Name")));
         panel.Children.Add(_ringName);
         panel.Children.Add(Gap());
-        panel.Children.Add(Caption("Nasıl açılır"));
+        panel.Children.Add(Caption(T("Nasıl açılır", "How it opens")));
         panel.Children.Add(_ringLayer);
         panel.Children.Add(Gap());
-        panel.Children.Add(Caption("Nerede açılır"));
+        panel.Children.Add(Caption(T("Nerede açılır", "Where it opens")));
         panel.Children.Add(_ringWhere);
 
         Pill? pick = null;
-        pick = TextButton("Seç ▾", () => PickRunningApp(pick!, name => _ringProcess.Text = name), Kind.Secondary);
+        pick = TextButton(T("Seç ▾", "Pick ▾"), () => PickRunningApp(pick!, name => _ringProcess.Text = name), Kind.Secondary);
         pick.Margin = new Thickness(8, 0, 0, 0);
         var processRow = new DockPanel();
         DockPanel.SetDock(pick, Dock.Right);
         processRow.Children.Add(pick);
         processRow.Children.Add(_ringProcess);
         _matchPanel.Children.Add(Gap());
-        _matchPanel.Children.Add(Caption("Uygulama"));
+        _matchPanel.Children.Add(Caption(T("Uygulama", "App")));
         _matchPanel.Children.Add(processRow);
         _matchPanel.Children.Add(Gap());
-        _matchPanel.Children.Add(Caption("Pencere başlığında geçen"));
+        _matchPanel.Children.Add(Caption(T("Pencere başlığında geçen", "Window title contains")));
         _matchPanel.Children.Add(_ringTitle);
-        _matchPanel.Children.Add(Small("Doluysa sadece başlığı buna uyan pencerelerde açılır (düzenli ifade)."));
+        _matchPanel.Children.Add(Small(T("Doluysa sadece başlığı buna uyan pencerelerde açılır (düzenli ifade).", "If filled, it only opens in windows whose title matches (regular expression).")));
         panel.Children.Add(_matchPanel);
 
-        var reset = IconButton("M4 12a8 8 0 1 0 2.3-5.6 M4 4v4h4", "Varsayılana döndür", ResetRing, Kind.Ghost);
-        var delete = IconButton(TrashIcon, "Halkayı sil", RemoveRing, Kind.Danger);
+        var reset = IconButton("M4 12a8 8 0 1 0 2.3-5.6 M4 4v4h4", T("Varsayılana döndür", "Reset to default"), ResetRing, Kind.Ghost);
+        var delete = IconButton(TrashIcon, T("Halkayı sil", "Delete ring"), RemoveRing, Kind.Danger);
         var actions = new WrapPanel { Margin = new Thickness(-14, 16, 0, 0) };
         actions.Children.Add(reset);
         actions.Children.Add(delete);
@@ -870,14 +875,14 @@ internal sealed class SettingsWindow : Window
         };
         _ringProcess.Box.TextChanged += (_, _) => EditRing(SetMatch);
         _ringTitle.Box.TextChanged += (_, _) => EditRing(SetMatch);
-        return Card("Halka", panel);
+        return Card(T("Halka", "Ring"), panel);
     }
 
     private FrameworkElement SliceInspector()
     {
-        var back = IconOnly(LeftIcon, "Saat yönünün tersine taşı", () => MoveSlice(-1));
-        var forward = IconOnly(RightIcon, "Saat yönünde taşı", () => MoveSlice(1));
-        var delete = IconOnly(TrashIcon, "Dilimi sil", RemoveSlice);
+        var back = IconOnly(LeftIcon, T("Saat yönünün tersine taşı", "Move counterclockwise"), () => MoveSlice(-1));
+        var forward = IconOnly(RightIcon, T("Saat yönünde taşı", "Move clockwise"), () => MoveSlice(1));
+        var delete = IconOnly(TrashIcon, T("Dilimi sil", "Delete slice"), RemoveSlice);
         var tools = new StackPanel { Orientation = Orientation.Horizontal };
         tools.Children.Add(back);
         tools.Children.Add(forward);
@@ -888,7 +893,7 @@ internal sealed class SettingsWindow : Window
         head.Children.Add(_sliceHeader);
         _sliceEditor.Children.Add(head);
 
-        _sliceEditor.Children.Add(Caption("Ne yapsın"));
+        _sliceEditor.Children.Add(Caption(T("Ne yapsın", "What it does")));
         var types = new WrapPanel();
         foreach (var (type, name, icon) in SliceTypes)
         {
@@ -904,7 +909,7 @@ internal sealed class SettingsWindow : Window
         _sliceEditor.Children.Add(types);
         _sliceEditor.Children.Add(Gap());
 
-        _toolPanel.Children.Add(Caption("Araç"));
+        _toolPanel.Children.Add(Caption(T("Araç", "Tool")));
         var grid = new UniformGrid { Columns = 3 };
         foreach (var tool in Tools)
         {
@@ -928,18 +933,18 @@ internal sealed class SettingsWindow : Window
         _toolPanel.Children.Add(Gap());
         _sliceEditor.Children.Add(_toolPanel);
 
-        _sliceEditor.Children.Add(Caption("Dilimde yazan"));
+        _sliceEditor.Children.Add(Caption(T("Dilimde yazan", "Label")));
         _sliceEditor.Children.Add(_sliceLabel);
         _sliceEditor.Children.Add(Gap());
 
-        _sliceEditor.Children.Add(Caption("İkon"));
+        _sliceEditor.Children.Add(Caption(T("İkon", "Icon")));
         var iconRow = new StackPanel { Orientation = Orientation.Horizontal };
         _iconPreview.Background = Palette.Surface;
         _iconPreview.BorderBrush = Palette.Line;
         iconRow.Children.Add(_iconPreview);
-        var change = TextButton("Değiştir ▾", () => _iconPopup.IsOpen = true, Kind.Secondary);
+        var change = TextButton(T("Değiştir ▾", "Change ▾"), () => _iconPopup.IsOpen = true, Kind.Secondary);
         change.VerticalAlignment = VerticalAlignment.Center;
-        var reset = TextButton("Varsayılan", () => EditSlice(s => s.Icon = null), Kind.Ghost);
+        var reset = TextButton(T("Varsayılan", "Default"), () => EditSlice(s => s.Icon = null), Kind.Ghost);
         reset.VerticalAlignment = VerticalAlignment.Center;
         iconRow.Children.Add(change);
         iconRow.Children.Add(reset);
@@ -969,20 +974,20 @@ internal sealed class SettingsWindow : Window
 
         var panel = new StackPanel { Margin = new Thickness(16) };
         panel.Children.Add(_sliceEditor);
-        return Card("Dilim", panel);
+        return Card(T("Dilim", "Slice"), panel);
     }
 
     private void RefreshRingCards()
     {
         _ringCards.Children.Clear();
-        foreach (var (layer, title) in new[] { (RingLayers.Main, "Sağ tuş"), (RingLayers.Files, "Shift + sağ tuş"), (RingLayers.Apps, "Ctrl + sağ tuş") })
+        foreach (var (layer, title) in new[] { (RingLayers.Main, T("Sağ tuş", "Right button")), (RingLayers.Files, T("Shift + sağ tuş", "Shift + right button")), (RingLayers.Apps, T("Ctrl + sağ tuş", "Ctrl + right button")) })
         {
             _ringCards.Children.Add(new TextBlock { Text = title, Foreground = Palette.Muted, FontSize = 11, FontWeight = FontWeights.SemiBold, Margin = new Thickness(8, 10, 0, 6) });
             var rings = _settings.Rings.Select((r, i) => (Ring: r, Index: i)).Where(x => LayerOf(x.Ring) == layer).OrderBy(x => x.Ring.Match is null ? 0 : 1).ToList();
             foreach (var (ring, index) in rings)
                 _ringCards.Children.Add(RingCard(ring, index));
             if (rings.Count == 0)
-                _ringCards.Children.Add(new TextBlock { Text = "Yerleşik halka kullanılıyor", Foreground = Palette.Muted, FontSize = 12, Margin = new Thickness(8, 0, 0, 6) });
+                _ringCards.Children.Add(new TextBlock { Text = T("Yerleşik halka kullanılıyor", "Using the built-in ring"), Foreground = Palette.Muted, FontSize = 12, Margin = new Thickness(8, 0, 0, 6) });
         }
     }
 
@@ -992,7 +997,7 @@ internal sealed class SettingsWindow : Window
         var icon = IconShape(ring.Match is null ? GlobeIcon : AppIcon, selected ? Palette.Accent : Palette.Muted);
         var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         text.Children.Add(new TextBlock { Text = DisplayName(ring), FontWeight = selected ? FontWeights.SemiBold : FontWeights.Normal, TextTrimming = TextTrimming.CharacterEllipsis });
-        text.Children.Add(new TextBlock { Text = $"{Where(ring)} · {ring.Slices.Count} dilim", Foreground = Palette.Muted, FontSize = 11, TextTrimming = TextTrimming.CharacterEllipsis });
+        text.Children.Add(new TextBlock { Text = $"{Where(ring)} · {T($"{ring.Slices.Count} dilim", $"{ring.Slices.Count} slices")}", Foreground = Palette.Muted, FontSize = 11, TextTrimming = TextTrimming.CharacterEllipsis });
         var row = new DockPanel();
         var iconBox = Sized(icon, 18, new Thickness(0, 0, 12, 0));
         DockPanel.SetDock(iconBox, Dock.Left);
@@ -1006,8 +1011,8 @@ internal sealed class SettingsWindow : Window
     private static string DisplayName(RingConfig ring) => string.IsNullOrWhiteSpace(ring.Name) ? ring.Id : ring.Name;
 
     private static string Where(RingConfig ring) => ring.Match is { } m
-        ? (string.IsNullOrWhiteSpace(m.Process) ? "Uygulama seçilmedi" : RingCatalog.ProcessName(m.Process)) + (string.IsNullOrEmpty(m.WindowTitle) ? "" : $" · \"{m.WindowTitle}\"")
-        : "Her yerde";
+        ? (string.IsNullOrWhiteSpace(m.Process) ? T("Uygulama seçilmedi", "No app chosen") : RingCatalog.ProcessName(m.Process)) + (string.IsNullOrEmpty(m.WindowTitle) ? "" : $" · \"{m.WindowTitle}\"")
+        : T("Her yerde", "Everywhere");
 
     private void SelectRing(int index)
     {
@@ -1022,8 +1027,8 @@ internal sealed class SettingsWindow : Window
     {
         if (Ring is not { } ring)
         {
-            _ringHeader.Text = "Halka yok";
-            _ringSubheader.Text = "Soldan \"Yeni\" ile bir halka ekle.";
+            _ringHeader.Text = T("Halka yok", "No rings");
+            _ringSubheader.Text = T("Soldan \"Yeni\" ile bir halka ekle.", "Add a ring with \"New\" on the left.");
             return;
         }
         _loading = true;
@@ -1044,14 +1049,14 @@ internal sealed class SettingsWindow : Window
         _ringHeader.Text = DisplayName(ring);
         var how = LayerOf(ring) switch
         {
-            RingLayers.Files => "Shift + sağ tuşu basılı tut",
-            RingLayers.Apps => "Ctrl + sağ tuşu basılı tut",
-            _ => "Sağ tuşu basılı tut",
+            RingLayers.Files => T("Shift + sağ tuşu basılı tut", "Hold Shift + right button"),
+            RingLayers.Apps => T("Ctrl + sağ tuşu basılı tut", "Hold Ctrl + right button"),
+            _ => T("Sağ tuşu basılı tut", "Hold the right button"),
         };
         _ringSubheader.Text = ring.Match is null
-            ? $"{how}. Başka halka eşleşmeyince her yerde bu açılır."
-            : $"{how}. Sadece {Where(ring)} penceresinde açılır.";
-        _sliceCount.Text = $"{ring.Slices.Count} / {RingCatalog.MaxSlices} dilim";
+            ? T($"{how}. Başka halka eşleşmeyince her yerde bu açılır.", $"{how}. Opens everywhere no other ring matches.")
+            : T($"{how}. Sadece {Where(ring)} penceresinde açılır.", $"{how}. Only opens in {Where(ring)} windows.");
+        _sliceCount.Text = T($"{ring.Slices.Count} / {RingCatalog.MaxSlices} dilim", $"{ring.Slices.Count} / {RingCatalog.MaxSlices} slices");
     }
 
     private void EditRing(Action<RingConfig> change)
@@ -1080,7 +1085,7 @@ internal sealed class SettingsWindow : Window
         _settings.Rings.Add(new RingConfig
         {
             Id = NewId("halka"),
-            Name = "Yeni halka",
+            Name = T("Yeni halka", "New ring"),
             Match = new RingMatch { Process = "" },
             Slices = [new SliceConfig { Tool = "crop" }, new SliceConfig { Tool = "ocr" }, new SliceConfig { Tool = "lens" }, new SliceConfig { Tool = "pin" }],
         });
@@ -1093,13 +1098,13 @@ internal sealed class SettingsWindow : Window
     {
         if (Ring is not { } ring)
             return;
-        if (MessageBox.Show(this, $"\"{DisplayName(ring)}\" halkası silinsin mi?", "Halkayı sil", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK)
+        if (MessageBox.Show(this, T($"\"{DisplayName(ring)}\" halkası silinsin mi?", $"Delete the \"{DisplayName(ring)}\" ring?"), T("Halkayı sil", "Delete ring"), MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK)
             return;
         _settings.Rings.Remove(ring);
         SelectRing(Math.Max(0, _ringIndex - 1));
         MarkDirty();
         if (ring.Match is null)
-            Say("Genel halkayı sildin: kaydedince bu katmanda yerleşik halka kullanılır.");
+            Say(T("Genel halkayı sildin: kaydedince bu katmanda yerleşik halka kullanılır.", "You deleted the global ring: after saving, this layer uses the built-in ring."));
     }
 
     /// <summary>Puts back the built-in slices of the ring's layer.</summary>
@@ -1107,7 +1112,7 @@ internal sealed class SettingsWindow : Window
     {
         if (Ring is not { } ring)
             return;
-        if (MessageBox.Show(this, $"\"{DisplayName(ring)}\" halkasının dilimleri yerleşik dilimlerle değiştirilsin mi?", "Varsayılana döndür", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK)
+        if (MessageBox.Show(this, T($"\"{DisplayName(ring)}\" halkasının dilimleri yerleşik dilimlerle değiştirilsin mi?", $"Replace the slices of \"{DisplayName(ring)}\" with the built-in ones?"), T("Varsayılana döndür", "Reset to default"), MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK)
             return;
         ring.Slices = LayerOf(ring) switch
         {
@@ -1139,7 +1144,7 @@ internal sealed class SettingsWindow : Window
         {
             _stageHost.Child = new TextBlock
             {
-                Text = $"En az {RingCatalog.MinSlices} dilim ekle",
+                Text = T($"En az {RingCatalog.MinSlices} dilim ekle", $"Add at least {RingCatalog.MinSlices} slices"),
                 Foreground = new SolidColorBrush(Color.FromRgb(0x9A, 0xA0, 0xA8)),
                 FontSize = 16,
                 HorizontalAlignment = HorizontalAlignment.Center,
@@ -1149,7 +1154,7 @@ internal sealed class SettingsWindow : Window
         }
 
         var items = ring.Slices.Select(s => RingCatalog.ItemFor(s, out var problem)
-            ?? new RingItem("invalid", string.IsNullOrEmpty(s.Label) ? "?" : s.Label, "Eksik bilgi", problem ?? "", WarnIcon)).ToList();
+            ?? new RingItem("invalid", string.IsNullOrEmpty(s.Label) ? "?" : s.Label, T("Eksik bilgi", "Missing info"), problem ?? "", WarnIcon)).ToList();
         var style = _settings.RingStyle();
         _stageHost.Width = _stageHost.Height = style.Size;
         _preview = new RingWindow(style, new GestureSettings(), items);
@@ -1191,7 +1196,7 @@ internal sealed class SettingsWindow : Window
             return;
         _loading = true;
         var type = slice.Tool is not null ? "tool" : slice.Action?.Type ?? "launch";
-        _sliceHeader.Text = $"{_slice + 1}. dilim";
+        _sliceHeader.Text = T($"{_slice + 1}. dilim", $"Slice {_slice + 1}");
 
         foreach (var (pill, text, icon) in _typeChips)
         {
@@ -1202,7 +1207,7 @@ internal sealed class SettingsWindow : Window
             PaintChoice(pill, text, icon, id == slice.Tool);
 
         var tool = Tools.FirstOrDefault(t => t.Id == slice.Tool);
-        _sliceLabel.Placeholder = tool is not null ? $"{tool.Label} (varsayılan)" : "Zorunlu, örn. Yeni sekme";
+        _sliceLabel.Placeholder = tool is not null ? T($"{tool.Label} (varsayılan)", $"{tool.Label} (default)") : T("Zorunlu, örn. Yeni sekme", "Required, e.g. New tab");
         _sliceLabel.Text = slice.Label ?? "";
         _toolPanel.Visibility = type == "tool" ? Visibility.Visible : Visibility.Collapsed;
         _valuePanel.Visibility = type == "tool" ? Visibility.Collapsed : Visibility.Visible;
@@ -1212,10 +1217,10 @@ internal sealed class SettingsWindow : Window
         _sliceValue.Multiline = type == "text";
         (_valueCaption.Text, _sliceValue.Placeholder) = type switch
         {
-            "launch" => ("Açılacak uygulama, dosya ya da klasör", @"örn. notepad.exe ya da C:\Projeler"),
-            "url" => ("Açılacak adres", "https://…"),
-            "hotkey" => ("Gönderilecek kısayol", ""),
-            _ => ("Yapıştırılacak metin", "Birden çok satır olabilir"),
+            "launch" => (T("Açılacak uygulama, dosya ya da klasör", "App, file or folder to open"), T(@"örn. notepad.exe ya da C:\Projeler", @"e.g. notepad.exe or C:\Projects")),
+            "url" => (T("Açılacak adres", "Address to open"), "https://…"),
+            "hotkey" => (T("Gönderilecek kısayol", "Shortcut to send"), ""),
+            _ => (T("Yapıştırılacak metin", "Text to paste"), T("Birden çok satır olabilir", "Can be several lines")),
         };
         _sliceValue.Text = type switch
         {
@@ -1237,7 +1242,7 @@ internal sealed class SettingsWindow : Window
         _iconPreview.Child = slice.Icon is null && slice.Action is { Type: "launch" } && AppIcons.For(slice.Action.Path) is { } app
             ? new Image { Source = app, Width = 24, Height = 24 }
             : icon is null ? null : Sized(IconShape(icon, Palette.Text), 20, new Thickness(0));
-        _sliceProblem.Text = problem is null ? "" : $"Bu dilim kaydedilemez: {problem}.";
+        _sliceProblem.Text = problem is null ? "" : T($"Bu dilim kaydedilemez: {problem}.", $"This slice can't be saved: {problem}.");
         _sliceProblem.Visibility = problem is null ? Visibility.Collapsed : Visibility.Visible;
     }
 
@@ -1293,8 +1298,8 @@ internal sealed class SettingsWindow : Window
         // Starts in the Start menu's shortcuts, where installed apps are easiest to find; shortcuts are kept as-is.
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
-            Title = "Açılacak uygulama ya da dosya",
-            Filter = "Uygulamalar|*.exe;*.lnk;*.bat;*.cmd|Tüm dosyalar|*.*",
+            Title = T("Açılacak uygulama ya da dosya", "App or file to open"),
+            Filter = T("Uygulamalar", "Apps") + "|*.exe;*.lnk;*.bat;*.cmd|" + T("Tüm dosyalar", "All files") + "|*.*",
             InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms),
             DereferenceLinks = false,
         };
@@ -1320,12 +1325,12 @@ internal sealed class SettingsWindow : Window
         if (_installedApps.Count == 0)
         {
             _installedApps = null; // try again next time rather than keep the failure
-            Say("Uygulama listesi okunamadı. Gözat ile dosyayı seçebilirsin.", problem: true);
+            Say(T("Uygulama listesi okunamadı. Gözat ile dosyayı seçebilirsin.", "Couldn't read the app list. You can pick the file with Browse."), problem: true);
             return;
         }
         AppIcons.Preload(_installedApps.Select(a => a.Path));
 
-        var search = new Input("Ara…");
+        var search = new Input(T("Ara…", "Search…"));
         var list = new ListBox
         {
             Background = Brushes.Transparent,
@@ -1340,7 +1345,7 @@ internal sealed class SettingsWindow : Window
 
         var dialog = new Window
         {
-            Title = "Uygulama seç",
+            Title = T("Uygulama seç", "Choose an app"),
             Owner = this,
             Width = 380,
             Height = 520,
@@ -1381,8 +1386,8 @@ internal sealed class SettingsWindow : Window
             chosen = app;
             dialog.Close();
         }
-        var cancel = TextButton("Vazgeç", dialog.Close, Kind.Ghost);
-        var pick = TextButton("Seç", Choose, Kind.Primary);
+        var cancel = TextButton(T("Vazgeç", "Cancel"), dialog.Close, Kind.Ghost);
+        var pick = TextButton(T("Seç", "Choose"), Choose, Kind.Primary);
         pick.Margin = new Thickness(8, 0, 0, 0);
         var buttons = new StackPanel
         {
@@ -1472,7 +1477,7 @@ internal sealed class SettingsWindow : Window
             return;
         if (ring.Slices.Count >= RingCatalog.MaxSlices)
         {
-            Say($"Bir halkada en fazla {RingCatalog.MaxSlices} dilim olabilir.", problem: true);
+            Say(T($"Bir halkada en fazla {RingCatalog.MaxSlices} dilim olabilir.", $"A ring can have at most {RingCatalog.MaxSlices} slices."), problem: true);
             return;
         }
         var unused = Tools.FirstOrDefault(t => ring.Slices.All(s => s.Tool != t.Id))?.Id ?? "crop";
@@ -1516,7 +1521,7 @@ internal sealed class SettingsWindow : Window
         if (!KeyChord.TryParse(chord, out var keys) || keys.Length < 2)
         {
             ShowPage(0);
-            Say("Klavye kısayolu en az bir değiştirici tuş (Ctrl, Alt, Shift, Win) ve bir tuş olmalı.", problem: true);
+            Say(T("Klavye kısayolu en az bir değiştirici tuş (Ctrl, Alt, Shift, Win) ve bir tuş olmalı.", "The keyboard shortcut needs at least one modifier (Ctrl, Alt, Shift, Win) and a key."), problem: true);
             return false;
         }
 
@@ -1531,6 +1536,7 @@ internal sealed class SettingsWindow : Window
 
         _settings.RingHotkey = chord;
         _settings.Theme = ThemeIds[_theme.Selected];
+        _settings.Language = Loc.Languages[_language.Selected];
         _settings.ExcludedProcesses = [.. _excluded];
         // A language the window does not offer (set by hand) stays until another one is picked.
         if (Array.FindIndex(Languages, l => l.Equals(_settings.TranslateTarget, StringComparison.OrdinalIgnoreCase)) is var known && (known >= 0 || _translateTarget.Selected != 0))
@@ -1544,13 +1550,16 @@ internal sealed class SettingsWindow : Window
         }
         catch (Exception e) when (e is System.IO.IOException or UnauthorizedAccessException)
         {
-            Say($"Kaydedilemedi: {e.Message}", problem: true);
+            Say(T($"Kaydedilemedi: {e.Message}", $"Couldn't save: {e.Message}"), problem: true);
             return false;
         }
         // The watcher reloads config.json and shows "Ayarlar yüklendi"; Windows may hold that notice back
         // (Focus Assist, Do Not Disturb), so the window confirms it too.
         _dirty = false;
-        Say($"✓ Kaydedildi, {DateTime.Now:HH:mm:ss}. Halkalar güncellendi.", done: true);
+        Say(T($"✓ Kaydedildi, {DateTime.Now:HH:mm:ss}. Halkalar güncellendi.", $"✓ Saved at {DateTime.Now:HH:mm:ss}. Rings updated."), done: true);
+        // Every string is picked once at startup, so a new language needs a fresh start.
+        if (Loc.Resolve(_settings.Language) == "en" != English)
+            Dispatcher.BeginInvoke(() => ((App)Application.Current).Restart());
         return true;
     }
 
@@ -1558,7 +1567,7 @@ internal sealed class SettingsWindow : Window
     {
         if (!_dirty)
             return;
-        var answer = MessageBox.Show(this, "Değişiklikler kaydedilsin mi?", "RadialShortcut Ayarları", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+        var answer = MessageBox.Show(this, T("Değişiklikler kaydedilsin mi?", "Save your changes?"), Title, MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
         if (answer == MessageBoxResult.Cancel || answer == MessageBoxResult.Yes && !Save())
             e.Cancel = true;
     }
@@ -1945,7 +1954,7 @@ internal sealed class SettingsWindow : Window
             Background = Palette.Surface;
             BorderBrush = Palette.Line;
             Child = _keys;
-            ToolTip = "Tıkla ve tuşlara bas. Backspace siler, Esc vazgeçer.";
+            ToolTip = T("Tıkla ve tuşlara bas. Backspace siler, Esc vazgeçer.", "Click and press the keys. Backspace clears, Esc cancels.");
             MouseLeftButtonDown += (_, e) =>
             {
                 Focus();
@@ -2023,7 +2032,7 @@ internal sealed class SettingsWindow : Window
             parts.Add(name);
             if (parts.Count < _minKeys)
             {
-                _note = "Ctrl, Alt, Shift ya da Win ile birlikte bas";
+                _note = T("Ctrl, Alt, Shift ya da Win ile birlikte bas", "Press it with Ctrl, Alt, Shift or Win");
                 Show();
                 return;
             }
@@ -2037,16 +2046,16 @@ internal sealed class SettingsWindow : Window
             _keys.Children.Clear();
             if (_recording)
             {
-                _keys.Children.Add(new TextBlock { Text = _note ?? "Tuşlara bas…", Foreground = _note is null ? Palette.Accent : Danger, VerticalAlignment = VerticalAlignment.Center });
+                _keys.Children.Add(new TextBlock { Text = _note ?? T("Tuşlara bas…", "Press the keys…"), Foreground = _note is null ? Palette.Accent : Danger, VerticalAlignment = VerticalAlignment.Center });
                 return;
             }
             if (Chord.Length == 0)
             {
-                _keys.Children.Add(new TextBlock { Text = "Tıkla ve kısayola bas", Foreground = Palette.Muted, VerticalAlignment = VerticalAlignment.Center });
+                _keys.Children.Add(new TextBlock { Text = T("Tıkla ve kısayola bas", "Click and press a shortcut"), Foreground = Palette.Muted, VerticalAlignment = VerticalAlignment.Center });
                 return;
             }
             foreach (var part in Chord.Split('+'))
-                _keys.Children.Add(Keycap(part == "Space" ? "Boşluk" : part));
+                _keys.Children.Add(Keycap(part == "Space" ? T("Boşluk", "Space") : part));
         }
 
         /// <summary>The <see cref="KeyChord"/> name of a key, or null for keys it does not know.</summary>

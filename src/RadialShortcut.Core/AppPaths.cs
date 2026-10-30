@@ -1,3 +1,5 @@
+using static RadialShortcut.Core.Loc;
+
 namespace RadialShortcut.Core;
 
 public static class AppPaths
@@ -15,16 +17,16 @@ public static class AppPaths
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "RadialShortcut");
 
     /// <summary>Documents\RadialShortcut\Resimler: where screenshots are saved. Created on first use.</summary>
-    public static string CaptureDirectory { get; } = Path.Combine(OutputDirectory, "Resimler");
+    public static string CaptureDirectory { get; } = Path.Combine(OutputDirectory, T("Resimler", "Pictures"));
 
     /// <summary>Documents\RadialShortcut\Videolar: where screen recordings are saved. Created on first use.</summary>
-    public static string RecordingDirectory { get; } = Path.Combine(OutputDirectory, "Videolar");
+    public static string RecordingDirectory { get; } = Path.Combine(OutputDirectory, T("Videolar", "Videos"));
 
     /// <summary>Documents\RadialShortcut\İndirilenler: media downloaded from a link.</summary>
-    public static string DownloadDirectory { get; } = Path.Combine(OutputDirectory, "İndirilenler");
+    public static string DownloadDirectory { get; } = Path.Combine(OutputDirectory, T("İndirilenler", "Downloads"));
 
     /// <summary>Documents\RadialShortcut\Dosyalar: converted files whose own folder cannot be written to.</summary>
-    public static string FilesDirectory { get; } = Path.Combine(OutputDirectory, "Dosyalar");
+    public static string FilesDirectory { get; } = Path.Combine(OutputDirectory, T("Dosyalar", "Files"));
 
     /// <summary>%LocalAppData%\RadialShortcut	ools: ffmpeg, yt-dlp and the background model, downloaded on first use.</summary>
     public static string ToolsDirectory { get; } =

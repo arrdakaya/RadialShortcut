@@ -6,7 +6,7 @@ using RadialShortcut.Core;
 namespace RadialShortcut.App.Tools;
 
 /// <summary>
-/// Scrolling screenshot (PLAN.md, section 7): the user scrolls the region while frames are grabbed,
+/// Scrolling screenshot: the user scrolls the region while frames are grabbed,
 /// lined up by their overlapping rows and the new rows stacked. Ends with the stop button or Esc.
 /// </summary>
 internal static class ScrollCapture
@@ -22,13 +22,13 @@ internal static class ScrollCapture
         var rect = region.ScreenRect;
         if (rect.Height < 40)
         {
-            ResultCard.ForMessage("Bölge çok kısa", "Kaydırmalı görüntü için en az 40 piksel yüksekliğinde bir bölge seç.", rect).ShowNear();
+            ResultCard.ForMessage(T("Bölge çok kısa", "Region too short"), T("Kaydırmalı görüntü için en az 40 piksel yüksekliğinde bir bölge seç.", "Pick a region at least 40 pixels tall for a scrolling capture."), rect).ShowNear();
             return;
         }
 
         using var stop = new CancellationTokenSource();
         using var frame = RegionFrame.Show(rect);
-        var badge = new Badge(rect) { Text = "Bölgede aşağı kaydır · bitince ■ veya Esc" }.WithStop(stop.Cancel);
+        var badge = new Badge(rect) { Text = T("Bölgede aşağı kaydır · bitince ■ veya Esc", "Scroll down in the region · ■ or Esc when done") }.WithStop(stop.Cancel);
         badge.Show();
 
         string? stopReason = null;
@@ -82,13 +82,13 @@ internal static class ScrollCapture
                 outputRows += newRows;
                 footer = match.Bottom;
 
-                badge.Text = $"{outputRows} px · kaydırmaya devam et, bitince ■ veya Esc";
+                badge.Text = T($"{outputRows} px · kaydırmaya devam et, bitince ■ veya Esc", $"{outputRows} px · keep scrolling, ■ or Esc when done");
                 previous = current;
                 previousRows = rows;
 
                 if (outputRows >= MaxHeight)
                 {
-                    stopReason = $"En fazla {MaxHeight} piksel yüksekliğe ulaşıldı.";
+                    stopReason = T($"En fazla {MaxHeight} piksel yüksekliğe ulaşıldı.", $"Reached the {MaxHeight} pixel height limit.");
                     break;
                 }
             }
@@ -98,8 +98,8 @@ internal static class ScrollCapture
                 output.Write(previous, 0, h * stride);
                 outputRows = h;
                 stopReason ??= missed > 0
-                    ? $"Kaydırılan kareler hizalanamadı ({missed} kare); tek kare kaydedildi. Daha yavaş kaydırmayı dene."
-                    : "Kaydırma algılanmadı; tek kare kaydedildi.";
+                    ? T($"Kaydırılan kareler hizalanamadı ({missed} kare); tek kare kaydedildi. Daha yavaş kaydırmayı dene.", $"Couldn't line up the scrolled frames ({missed} frames); saved a single frame. Try scrolling slower.")
+                    : T("Kaydırma algılanmadı; tek kare kaydedildi.", "No scrolling detected; saved a single frame.");
             }
             else if (footer > 0)
             {
@@ -109,12 +109,12 @@ internal static class ScrollCapture
 
             var image = FrameGrabber.ToImage(output.ToArray(), w, outputRows);
             ToolRunner.CopyImage(image);
-            var file = ToolRunner.Save(image, "Uzun ekran görüntüsü");
+            var file = ToolRunner.Save(image, T("Uzun ekran görüntüsü", "Long screenshot"));
 
-            ResultCard.ForImage("Panoya kopyalandı", stopReason ?? $"{w} × {outputRows} · {matched} kaydırma eklendi, {missed} kare hizalanamadı · {Path.GetFileName(file)}", image, rect)
-                .WithButton("Dosyayı sil", () => ToolRunner.DeleteCapture(file))
-                .WithButton("Klasörde göster", () => ToolRunner.ShowInFolder(file))
-                .WithButton("Tamam", () => { }, primary: true)
+            ResultCard.ForImage(T("Panoya kopyalandı", "Copied to clipboard"), stopReason ?? T($"{w} × {outputRows} · {matched} kaydırma eklendi, {missed} kare hizalanamadı · {Path.GetFileName(file)}", $"{w} × {outputRows} · {matched} scrolls added, {missed} frames not matched · {Path.GetFileName(file)}"), image, rect)
+                .WithButton(T("Dosyayı sil", "Delete file"), () => ToolRunner.DeleteCapture(file))
+                .WithButton(T("Klasörde göster", "Show in folder"), () => ToolRunner.ShowInFolder(file))
+                .WithButton(T("Tamam", "OK"), () => { }, primary: true)
                 .ShowNear();
         }
         finally

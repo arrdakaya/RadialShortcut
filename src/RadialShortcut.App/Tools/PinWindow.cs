@@ -36,7 +36,7 @@ internal sealed class PinWindow : Window
         SizeToContent = SizeToContent.WidthAndHeight;
         Left = Top = -10000;
         Cursor = Cursors.SizeAll;
-        ToolTip = "Sürükle: taşı · Tekerlek veya + / −: büyüt-küçült · Çift tık / Esc: kapat";
+        ToolTip = T("Sürükle: taşı · Tekerlek veya + / −: büyüt-küçült · Çift tık / Esc: kapat", "Drag: move · Wheel or + / −: zoom · Double-click / Esc: close");
 
         // One image pixel per screen pixel at zoom 1, so the pin sits exactly over what it shows.
         var image = new Image
@@ -109,7 +109,7 @@ internal sealed class PinWindow : Window
             VerticalAlignment = VerticalAlignment.Top,
             Margin = new Thickness(0, 2, 2, 0), // straddles the frame's corner
             Cursor = Cursors.Hand,
-            ToolTip = "Kapat",
+            ToolTip = T("Kapat", "Close"),
             Child = new System.Windows.Shapes.Path
             {
                 Data = Geometry.Parse("M0,0 L8,8 M8,0 L0,8"),
@@ -151,13 +151,13 @@ internal sealed class PinWindow : Window
             item.Click += (_, _) => onClick();
             menu.Items.Add(item);
         }
-        Add("Kopyala", () => ToolRunner.CopyImage(_region.Image));
-        Add("Dosyaya kaydet", () => ToolRunner.ShowInFolder(ToolRunner.Save(_region.Image)));
-        Add("Büyüt (+)", () => Zoom(1.25));
-        Add("Küçült (−)", () => Zoom(1 / 1.25));
-        Add("Gerçek boyut (0)", () => _zoom.ScaleX = _zoom.ScaleY = 1);
+        Add(T("Kopyala", "Copy"), () => ToolRunner.CopyImage(_region.Image));
+        Add(T("Dosyaya kaydet", "Save to file"), () => ToolRunner.ShowInFolder(ToolRunner.Save(_region.Image)));
+        Add(T("Büyüt (+)", "Zoom in (+)"), () => Zoom(1.25));
+        Add(T("Küçült (−)", "Zoom out (−)"), () => Zoom(1 / 1.25));
+        Add(T("Gerçek boyut (0)", "Actual size (0)"), () => _zoom.ScaleX = _zoom.ScaleY = 1);
         menu.Items.Add(new Separator());
-        Add("Kapat", Close);
+        Add(T("Kapat", "Close"), Close);
         return menu;
     }
 }

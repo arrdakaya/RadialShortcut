@@ -174,7 +174,7 @@ internal static class SelectedFiles
         return files;
     }
 
-    public const string AllMedia = "Resim, video, ses, PDF|*.png;*.jpg;*.jpeg;*.webp;*.bmp;*.gif;*.tif;*.tiff;*.heic;*.avif;*.ico;*.mp4;*.mov;*.mkv;*.webm;*.avi;*.wmv;*.m4v;*.mp3;*.m4a;*.wav;*.ogg;*.opus;*.flac;*.aac;*.pdf|Tüm dosyalar|*.*";
-    public const string Images = "Resimler|*.png;*.jpg;*.jpeg;*.webp;*.bmp;*.gif;*.tif;*.tiff;*.heic;*.avif|Tüm dosyalar|*.*";
-    public const string Videos = "Videolar|*.mp4;*.mov;*.mkv;*.webm;*.avi;*.wmv;*.m4v|Tüm dosyalar|*.*";
+    public static string AllMedia => T("Resim, video, ses, PDF", "Images, video, audio, PDF") + "|*.png;*.jpg;*.jpeg;*.webp;*.bmp;*.gif;*.tif;*.tiff;*.heic;*.avif;*.ico;*.mp4;*.mov;*.mkv;*.webm;*.avi;*.wmv;*.m4v;*.mp3;*.m4a;*.wav;*.ogg;*.opus;*.flac;*.aac;*.pdf|" + T("Tüm dosyalar", "All files") + "|*.*";
+    public static string Images => T("Resimler", "Images") + "|*.png;*.jpg;*.jpeg;*.webp;*.bmp;*.gif;*.tif;*.tiff;*.heic;*.avif|" + T("Tüm dosyalar", "All files") + "|*.*";
+    public static string Videos => T("Videolar", "Videos") + "|*.mp4;*.mov;*.mkv;*.webm;*.avi;*.wmv;*.m4v|" + T("Tüm dosyalar", "All files") + "|*.*";
 }

@@ -12,7 +12,7 @@ using Windows.Media.Transcoding;
 namespace RadialShortcut.App.Tools;
 
 /// <summary>
-/// Screen recording to MP4 (PLAN.md, section 7): pick a region, 3-2-1, then record until the stop button
+/// Screen recording to MP4: pick a region, 3-2-1, then record until the stop button
 /// or Esc. Frames are GDI grabs (cursor drawn in) fed through a MediaStreamSource into Windows' own
 /// H.264 encoder, so no extra codec is needed. No audio and no GIF yet.
 /// </summary>
@@ -30,7 +30,7 @@ internal static class ScreenRecorder
         var rect = new Int32Rect(r.X, r.Y, r.Width & ~1, r.Height & ~1);
         if (rect.Width < 32 || rect.Height < 32)
         {
-            ResultCard.ForMessage("Bölge çok küçük", "Kayıt için en az 32 × 32 piksellik bir bölge seç.", r).ShowNear();
+            ResultCard.ForMessage(T("Bölge çok küçük", "Region too small"), T("Kayıt için en az 32 × 32 piksellik bir bölge seç.", "Pick a region of at least 32 × 32 pixels to record."), r).ShowNear();
             return;
         }
 
@@ -40,7 +40,7 @@ internal static class ScreenRecorder
         badge.Show();
         for (var i = 3; i > 0 && !stop.IsCancellationRequested; i--)
         {
-            badge.Text = $"Kayıt {i} sn sonra başlıyor";
+            badge.Text = T($"Kayıt {i} sn sonra başlıyor", $"Recording starts in {i} s");
             await Task.Delay(1000);
         }
         if (stop.IsCancellationRequested)
@@ -50,11 +50,11 @@ internal static class ScreenRecorder
         }
 
         Directory.CreateDirectory(AppPaths.RecordingDirectory);
-        var file = Path.Combine(AppPaths.RecordingDirectory, $"Ekran kaydı {DateTime.Now:yyyy-MM-dd HHmmss}.mp4");
+        var file = Path.Combine(AppPaths.RecordingDirectory, $"{T("Ekran kaydı", "Screen recording")} {DateTime.Now:yyyy-MM-dd HHmmss}.mp4");
         frame.Color = RegionFrame.Live;
         var clock = Stopwatch.StartNew();
         var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
-        timer.Tick += (_, _) => badge.Text = $"Kaydediliyor {clock.Elapsed:mm\\:ss} · Esc";
+        timer.Tick += (_, _) => badge.Text = T($"Kaydediliyor {clock.Elapsed:mm\\:ss} · Esc", $"Recording {clock.Elapsed:mm\\:ss} · Esc");
         timer.Start();
 
         try
@@ -69,10 +69,10 @@ internal static class ScreenRecorder
 
         var duration = clock.Elapsed;
         ToolRunner.Remember("record", file);
-        ResultCard.ForMessage("Kayıt kaydedildi", $"{rect.Width} × {rect.Height} · {duration:mm\\:ss} · {Path.GetFileName(file)}", rect)
-            .WithButton("Klasörde göster", () => ToolRunner.ShowInFolder(file))
-            .WithButton("Kırp", () => TrimWindow.Open(file))
-            .WithButton("Oynat", () => ToolRunner.OpenUrl(file), primary: true)
+        ResultCard.ForMessage(T("Kayıt kaydedildi", "Recording saved"), $"{rect.Width} × {rect.Height} · {duration:mm\\:ss} · {Path.GetFileName(file)}", rect)
+            .WithButton(T("Klasörde göster", "Show in folder"), () => ToolRunner.ShowInFolder(file))
+            .WithButton(T("Kırp", "Trim"), () => TrimWindow.Open(file))
+            .WithButton(T("Oynat", "Play"), () => ToolRunner.OpenUrl(file), primary: true)
             .ShowNear();
     }
 
@@ -115,7 +115,7 @@ internal static class ScreenRecorder
         var transcoder = new MediaTranscoder { HardwareAccelerationEnabled = true };
         var prepared = await transcoder.PrepareMediaStreamSourceTranscodeAsync(source, stream, profile);
         if (!prepared.CanTranscode)
-            throw new InvalidOperationException($"Kodlayıcı hazırlanamadı ({prepared.FailureReason}).");
+            throw new InvalidOperationException(T($"Kodlayıcı hazırlanamadı ({prepared.FailureReason}).", $"Couldn't set up the encoder ({prepared.FailureReason})."));
 
         var encoding = prepared.TranscodeAsync().AsTask();
 

@@ -15,6 +15,10 @@ public partial class App : Application
 {
     private const string MutexName = @"Local\RadialShortcut.SingleInstance";
 
+    // Before the fields below: the built-in tool lists are translated once, on first use.
+    // The README images (--snapshot) are always in English.
+    static App() => Loc.Set(Environment.GetCommandLineArgs().Contains("--snapshot") ? "en" : UserSettings.Load(AppPaths.ConfigFile).Language);
+
     private Mutex? _singleInstance;
     private TaskbarIcon? _tray;
     private MouseHookService? _hook;
@@ -84,6 +88,12 @@ public partial class App : Application
 
         _tray = (TaskbarIcon)FindResource("TrayIcon");
         _tray.ForceCreate();
+        foreach (var (name, tr, en) in new[]
+        {
+            ("UpdateItem", "Güncelle", "Update"), ("LibraryItem", "Kütüphane", "Library"), ("PauseItem", "Duraklat", "Pause"),
+            ("SettingsItem", "Ayarlar…", "Settings…"), ("CheckUpdateItem", "Güncellemeleri denetle", "Check for updates"), ("ExitItem", "Çıkış", "Exit"),
+        })
+            TrayItem(name).Header = T(tr, en);
 
         // The debug panel is for development builds only; released builds drop it and its menu item.
         var debugItem = _tray.ContextMenu!.Items.OfType<MenuItem>().Single(i => i.Name == "DebugItem");
@@ -114,7 +124,7 @@ public partial class App : Application
         _tray.TrayBalloonTipClosed += (_, _) => _welcomeShown = false;
         // One notification per start: the welcome, the update result, or just that it is running.
         if (!Welcome() && !SayUpdated())
-            _tray?.ShowNotification("RadialShortcut başladı", "Tepside çalışıyor. Sağ tuşu basılı tutup çek: halka açılır.");
+            _tray?.ShowNotification(T("RadialShortcut başladı", "RadialShortcut started"), T("Tepside çalışıyor. Sağ tuşu basılı tutup çek: halka açılır.", "Running in the tray. Hold the right button and flick: the ring opens."));
         Dispatcher.BeginInvoke(SelectedFiles.WarmUp, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
     }
 
@@ -129,9 +139,9 @@ public partial class App : Application
             File.Delete(AppPaths.UpdatedFile);
             // When the swap failed the old version starts again; then there is nothing to celebrate.
             if (Version.TryParse(version, out var v) && v <= Updater.Current)
-                _tray?.ShowNotification("Güncellendi", $"RadialShortcut {Updater.Current.ToString(3)} kuruldu.");
+                _tray?.ShowNotification(T("Güncellendi", "Updated"), T($"RadialShortcut {Updater.Current.ToString(3)} kuruldu.", $"RadialShortcut {Updater.Current.ToString(3)} is installed."));
             else
-                _tray?.ShowNotification("Güncellenemedi", "Yeni sürüm kurulamadı, önceki sürüm açıldı. Tepsi menüsünden tekrar deneyebilirsin.");
+                _tray?.ShowNotification(T("Güncellenemedi", "Update failed"), T("Yeni sürüm kurulamadı, önceki sürüm açıldı. Tepsi menüsünden tekrar deneyebilirsin.", "The new version couldn't be installed, so the previous one was started. You can try again from the tray menu."));
             return true;
         }
         catch (IOException)
@@ -145,10 +155,13 @@ public partial class App : Application
     {
         if (File.Exists(AppPaths.WelcomedFile))
             return false;
-        _tray?.ShowNotification("RadialShortcut çalışıyor",
+        _tray?.ShowNotification(T("RadialShortcut çalışıyor", "RadialShortcut is running"), T(
             "Sağ tuşu basılı tutup fareyi bir yöne çek: halka açılır, bırakınca seçilir.\n"
             + "Explorer'da dosya seçiliyken dosya halkası açılır. Dosyayı sürüklerken bir an bekletirsen araçlar çıkar.\n"
-            + "Tıkla: nasıl kullanılır. Tepsi simgesi: ayarlar, sağ tık: menü.");
+            + "Tıkla: nasıl kullanılır. Tepsi simgesi: ayarlar, sağ tık: menü.",
+            "Hold the right button and move the mouse in a direction: the ring opens, release to pick.\n"
+            + "With files selected in Explorer you get the file ring. Pause while dragging a file and the tools appear.\n"
+            + "Click: how to use it. Tray icon: settings, right-click: menu."));
         _welcomeShown = true;
         try { File.WriteAllText(AppPaths.WelcomedFile, ""); } catch (IOException) { }
         return true;
@@ -156,21 +169,21 @@ public partial class App : Application
 
     /// <summary>
     /// Reads config.json and rebuilds the rings. A file that does not parse leaves the last good
-    /// rings in place (PLAN.md, section 9); either way problems are shown in a tray notice.
+    /// rings in place; either way problems are shown in a tray notice.
     /// </summary>
     private void LoadConfig(bool startup = false)
     {
         WriteExampleConfig();
         if (!UserSettings.TryLoad(AppPaths.ConfigFile, out var config, out var error))
         {
-            _tray?.ShowNotification("config.json okunamadı", $"{error}\nSon geçerli ayarlar kullanılıyor.");
+            _tray?.ShowNotification(T("config.json okunamadı", "Couldn't read config.json"), T($"{error}\nSon geçerli ayarlar kullanılıyor.", $"{error}\nUsing the last valid settings."));
             return;
         }
 
         Palette.Theme = config.Theme;
         _updateRepo = string.IsNullOrWhiteSpace(config.UpdateRepo) ? DefaultUpdateRepo : config.UpdateRepo.Trim();
         var hotkeyProblem = _hotkey is not null && !_hotkey.Register(config.RingHotkey)
-            ? $"Klavye kısayolu \"{config.RingHotkey}\" kullanılamıyor (geçersiz ya da başka bir uygulamada)."
+            ? T($"Klavye kısayolu \"{config.RingHotkey}\" kullanılamıyor (geçersiz ya da başka bir uygulamada).", $"The keyboard shortcut \"{config.RingHotkey}\" can't be used (invalid or taken by another app).")
             : null;
         _hook?.SetExcludedProcesses(config.ExcludedProcesses?.Select(RingCatalog.ProcessName) ?? _settings.ExcludedProcesses);
 
@@ -179,11 +192,11 @@ public partial class App : Application
         RebuildRings();
 
         if (_catalog.Warnings.Count > 0)
-            _tray?.ShowNotification("config.json: bazı halkalar atlandı", string.Join("\n", _catalog.Warnings.Take(4)));
+            _tray?.ShowNotification(T("config.json: bazı halkalar atlandı", "config.json: some rings were skipped"), string.Join("\n", _catalog.Warnings.Take(4)));
         else if (hotkeyProblem is not null)
             _tray?.ShowNotification("config.json", hotkeyProblem);
         else if (!startup)
-            _tray?.ShowNotification("Ayarlar yüklendi", $"{_catalog.All.Count()} halka hazır.");
+            _tray?.ShowNotification(T("Ayarlar yüklendi", "Settings loaded"), T($"{_catalog.All.Count()} halka hazır.", $"{_catalog.All.Count()} rings ready."));
     }
 
     /// <summary>Drops every ring window; they take their colors when built.</summary>
@@ -268,7 +281,7 @@ public partial class App : Application
         _debug?.Show(ev);
         if (ev.Kind == GestureEventKind.RingOpened)
         {
-            // The ring follows the window that was right-clicked, not the one with focus (PLAN.md, section 8).
+            // The ring follows the window that was right-clicked, not the one with focus.
             var target = Native.WindowAt(ev.Origin.X, ev.Origin.Y);
             // Ctrl opens the app ring; Shift picks the other of main and files: over files selected in
             // Explorer the file ring is the default. Checked here, on the UI thread, so the hook callback stays fast.
@@ -350,8 +363,8 @@ public partial class App : Application
     /// <summary>Under the title while nothing is hovered: the rings still reachable from this one.</summary>
     private static string? IdleHint(string layer) => layer switch
     {
-        RingLayers.Main => "Shift: dosya\nCtrl: uygulama",
-        RingLayers.Files => "Ctrl: uygulama",
+        RingLayers.Main => T("Shift: dosya\nCtrl: uygulama", "Shift: files\nCtrl: apps"),
+        RingLayers.Files => T("Ctrl: uygulama", "Ctrl: apps"),
         _ => null,
     };
 
@@ -396,9 +409,9 @@ public partial class App : Application
             return false;
         _update = release;
         var item = TrayItem("UpdateItem");
-        item.Header = $"Güncelle (v{release.Version})";
+        item.Header = T($"Güncelle (v{release.Version})", $"Update (v{release.Version})");
         item.Visibility = Visibility.Visible;
-        _tray?.ShowNotification("Güncelleme var", $"RadialShortcut {release.Version} hazır. Tepsi menüsünden \"Güncelle\" ile kurabilirsin.");
+        _tray?.ShowNotification(T("Güncelleme var", "Update available"), T($"RadialShortcut {release.Version} hazır. Tepsi menüsünden \"Güncelle\" ile kurabilirsin.", $"RadialShortcut {release.Version} is ready. Install it with \"Update\" in the tray menu."));
         return true;
     }
 
@@ -406,15 +419,15 @@ public partial class App : Application
     {
         var item = (MenuItem)sender;
         item.IsEnabled = false;
-        item.Header = "Denetleniyor…";
+        item.Header = T("Denetleniyor…", "Checking…");
         try
         {
             if (!await CheckForUpdateAsync())
-                _tray?.ShowNotification("Güncelleme yok", $"RadialShortcut {Updater.Current.ToString(3)} en son sürüm (ya da GitHub'a ulaşılamadı).");
+                _tray?.ShowNotification(T("Güncelleme yok", "No update"), T($"RadialShortcut {Updater.Current.ToString(3)} en son sürüm (ya da GitHub'a ulaşılamadı).", $"RadialShortcut {Updater.Current.ToString(3)} is the latest version (or GitHub couldn't be reached)."));
         }
         finally
         {
-            item.Header = "Güncellemeleri denetle";
+            item.Header = T("Güncellemeleri denetle", "Check for updates");
             item.IsEnabled = true;
         }
     }
@@ -429,8 +442,8 @@ public partial class App : Application
         item.IsEnabled = false;
         if (await InstallUpdateAsync(text => item.Header = text) is { } error)
         {
-            _tray?.ShowNotification("Güncellenemedi", error);
-            item.Header = $"Güncelle (v{_update.Version})";
+            _tray?.ShowNotification(T("Güncellenemedi", "Update failed"), error);
+            item.Header = T($"Güncelle (v{_update.Version})", $"Update (v{_update.Version})");
             item.IsEnabled = true;
         }
     }
@@ -440,13 +453,13 @@ public partial class App : Application
     {
         // The tray and the settings window share one download folder, so only one install runs.
         if (_installing)
-            return "Güncelleme zaten kuruluyor.";
+            return T("Güncelleme zaten kuruluyor.", "The update is already being installed.");
         _installing = true;
         UpdateToast? toast = null;
         try
         {
             if (_update is null && !await CheckForUpdateAsync())
-                return "Kurulacak yeni sürüm bulunamadı.";
+                return T("Kurulacak yeni sürüm bulunamadı.", "No new version found to install.");
             toast = new UpdateToast(_update!.Version);
             toast.Show();
             await Updater.InstallAsync(_update, text =>
@@ -496,7 +509,7 @@ public partial class App : Application
         if (_hook is not null)
             _hook.Paused = paused;
         if (_tray is not null)
-            _tray.ToolTipText = paused ? "RadialShortcut (duraklatıldı)" : "RadialShortcut";
+            _tray.ToolTipText = paused ? T("RadialShortcut (duraklatıldı)", "RadialShortcut (paused)") : "RadialShortcut";
     }
 
     private void OnDebugClick(object sender, RoutedEventArgs e)
@@ -514,4 +527,14 @@ public partial class App : Application
     private void OpenSettings(int? page = null) => SettingsWindow.ShowOrActivate(_hotkey, CheckForUpdateAsync, InstallUpdateAsync, page);
 
     private void OnExitClick(object sender, RoutedEventArgs e) => Shutdown();
+
+    /// <summary>Starts a fresh copy and quits, for changes only read at startup (the language).</summary>
+    public void Restart()
+    {
+        _singleInstance?.ReleaseMutex();
+        _singleInstance?.Dispose();
+        _singleInstance = null;
+        Process.Start(Environment.ProcessPath!);
+        Shutdown();
+    }
 }

@@ -480,3 +480,11 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Local notes and scratch files, never published
+PLAN.md
+*.local.md
+NOTES.md
+TODO.md
+tools/icon_variants/
+tools/icon_preview.png

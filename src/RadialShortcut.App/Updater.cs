@@ -69,7 +69,7 @@ internal static class Updater
         var work = Path.Combine(Path.GetTempPath(), $"RadialShortcut-update-{Guid.NewGuid():N}");
         Directory.CreateDirectory(work);
 
-        status("Güncelleme indiriliyor");
+        status(T("Güncelleme indiriliyor", "Downloading update"));
         var zip = Path.Combine(work, Asset);
         using (var response = await Http.GetAsync(release.ZipUrl, HttpCompletionOption.ResponseHeadersRead))
         {
@@ -89,32 +89,32 @@ internal static class Updater
                 {
                     percent = now;
                     progress?.Invoke(now / 100.0);
-                    status($"Güncelleme indiriliyor %{now}");
+                    status(T($"Güncelleme indiriliyor %{now}", $"Downloading update {now}%"));
                 }
             }
         }
 
-        status("Doğrulanıyor");
+        status(T("Doğrulanıyor", "Verifying"));
         var expected = (await Http.GetStringAsync(release.ShaUrl)).Split(' ', '\t', '\n')[0].Trim();
         string actual;
         await using (var file = File.OpenRead(zip))
             actual = Convert.ToHexStringLower(await SHA256.HashDataAsync(file));
         if (!actual.Equals(expected, StringComparison.OrdinalIgnoreCase))
-            throw new InvalidDataException("İndirilen güncelleme doğrulanamadı (SHA-256 tutmuyor), kurulmadı.");
+            throw new InvalidDataException(T("İndirilen güncelleme doğrulanamadı (SHA-256 tutmuyor), kurulmadı.", "The downloaded update failed verification (SHA-256 mismatch) and was not installed."));
 
         var fresh = Path.Combine(work, "new");
         ZipFile.ExtractToDirectory(zip, fresh);
         if (!File.Exists(Path.Combine(fresh, "RadialShortcut.exe")))
-            throw new InvalidDataException("Güncelleme paketinde RadialShortcut.exe yok.");
+            throw new InvalidDataException(T("Güncelleme paketinde RadialShortcut.exe yok.", "The update package has no RadialShortcut.exe."));
 
         // A recording or a conversion in progress finishes first.
         while (ToolRunner.IsBusy)
         {
-            status("Açık araç bitince güncellenecek");
+            status(T("Açık araç bitince güncellenecek", "Updates when the open tool is done"));
             await Task.Delay(1000);
         }
 
-        status("Yeniden başlatılıyor");
+        status(T("Yeniden başlatılıyor", "Restarting"));
         // The new version finds this and says the update went through.
         try { File.WriteAllText(AppPaths.UpdatedFile, release.Version.ToString(3)); } catch (IOException) { }
 

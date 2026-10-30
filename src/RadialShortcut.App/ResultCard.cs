@@ -10,7 +10,7 @@ using RadialShortcut.App.Capture;
 namespace RadialShortcut.App;
 
 /// <summary>
-/// Small card shown next to the captured region (PLAN.md, section 6): a preview plus a few buttons.
+/// Small card shown next to the captured region: a preview plus a few buttons.
 /// Stays while hovered or focused; closes on Esc or when the user clicks elsewhere.
 /// </summary>
 public sealed class ResultCard : Window
@@ -116,7 +116,7 @@ public sealed class ResultCard : Window
     {
         var answer = new TaskCompletionSource<bool>();
         var card = ForMessage(title, message, anchor)
-            .WithButton("Vazgeç", () => answer.TrySetResult(false))
+            .WithButton(T("Vazgeç", "Cancel"), () => answer.TrySetResult(false))
             .WithButton(yes, () => answer.TrySetResult(true), primary: true);
         card.Closed += (_, _) => answer.TrySetResult(false);
         card.ShowNear();
@@ -166,7 +166,7 @@ public sealed class ResultCard : Window
     public void ShowNear()
     {
         if (_buttons.Children.Count == 0)
-            WithButton("Kapat", Dismiss);
+            WithButton(T("Kapat", "Close"), Dismiss);
         Show();
         Activate();
     }

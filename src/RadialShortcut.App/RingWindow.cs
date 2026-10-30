@@ -134,7 +134,7 @@ public sealed class RingWindow : Window
         SetHover(-1);
         // SetHover skips the text when nothing was hovered before, so the idle hint is set here too.
         _title.Text = "Genel";
-        _hint.Text = idleHint ?? "Bırak: iptal";
+        _hint.Text = idleHint ?? T("Bırak: iptal", "Release: cancel");
         foreach (var e in new UIElement[] { _indicator, _centerRing })
         {
             e.BeginAnimation(OpacityProperty, null);
@@ -310,7 +310,7 @@ public sealed class RingWindow : Window
 
         var item = _hover >= 0 ? _items[_hover] : null;
         _title.Text = item?.Title ?? "Genel";
-        _hint.Text = item?.Hint ?? _idleHint ?? "Bırak: iptal";
+        _hint.Text = item?.Hint ?? _idleHint ?? T("Bırak: iptal", "Release: cancel");
         _centerText.BeginAnimation(OpacityProperty, new DoubleAnimation(0.3, 1, TimeSpan.FromMilliseconds(140))
         {
             EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },

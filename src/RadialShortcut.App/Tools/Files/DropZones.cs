@@ -88,7 +88,7 @@ internal sealed class DropZones : Window
     private DropZones(ScreenPoint origin, IReadOnlyList<string> files)
     {
         _origin = origin;
-        Title = "RadialShortcut bırakma alanı";
+        Title = T("RadialShortcut bırakma alanı", "RadialShortcut drop zones");
         AllowDrop = true;
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
@@ -122,7 +122,7 @@ internal sealed class DropZones : Window
             {
                 Children =
                 {
-                    new TextBlock { Text = "Dosyayı bir işin üstüne bırak", Foreground = Frozen(new SolidColorBrush(_glass.Muted)), FontSize = 11.5, Margin = new Thickness(6, 0, 0, 8) },
+                    new TextBlock { Text = T("Dosyayı bir işin üstüne bırak", "Drop the file on a tool"), Foreground = Frozen(new SolidColorBrush(_glass.Muted)), FontSize = 11.5, Margin = new Thickness(6, 0, 0, 8) },
                     tiles,
                 },
             },

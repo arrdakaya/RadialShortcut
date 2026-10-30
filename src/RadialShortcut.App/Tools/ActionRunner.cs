@@ -4,7 +4,7 @@ using RadialShortcut.Core;
 namespace RadialShortcut.App.Tools;
 
 /// <summary>
-/// User-defined slices from config.json (PLAN.md, section 7b). RingCatalog has already checked that
+/// User-defined slices from config.json. RingCatalog has already checked that
 /// each action has what it needs. Errors surface through ToolRunner's card and log.
 /// </summary>
 internal static class ActionRunner
