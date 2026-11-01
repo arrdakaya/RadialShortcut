@@ -122,9 +122,9 @@ public partial class App : Application
                 OpenSettings(page: 2);
         };
         _tray.TrayBalloonTipClosed += (_, _) => _welcomeShown = false;
-        // One notification per start: the welcome, the update result, or just that it is running.
-        if (!Welcome() && !SayUpdated())
-            _tray?.ShowNotification(T("RadialShortcut başladı", "RadialShortcut started"), T("Tepside çalışıyor. Sağ tuşu basılı tutup çek: halka açılır.", "Running in the tray. Hold the right button and flick: the ring opens."));
+        // A normal start is silent; only the first launch and the start after an update say something.
+        if (!Welcome())
+            SayUpdated();
         Dispatcher.BeginInvoke(SelectedFiles.WarmUp, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
     }
 
