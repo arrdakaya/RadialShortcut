@@ -17,6 +17,8 @@ internal static class InputSender
     /// </summary>
     public static void RightDown() => Send(Button(MOUSEEVENTF_RIGHTDOWN));
 
+    public static void RightUp() => Send(Button(MOUSEEVENTF_RIGHTUP));
+
     private static INPUT Button(uint flag) => new()
     {
         type = INPUT_MOUSE,

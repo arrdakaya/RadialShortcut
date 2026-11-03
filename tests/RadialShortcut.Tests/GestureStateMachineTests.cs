@@ -14,6 +14,7 @@ public class GestureStateMachineTests
         public void StopHoldTimer() { TimerRunning = false; }
         public void ReplayClick() => Calls.Add("replay click");
         public void ReplayDown(ScreenPoint at, ScreenPoint current) => Calls.Add($"replay down {at.X},{at.Y} -> {current.X},{current.Y}");
+        public void ReplayUp() => Calls.Add("replay up");
         public void RingOpened(ScreenPoint origin) => Calls.Add("ring opened");
         public void RingMoved(ScreenPoint origin, ScreenPoint current) => Calls.Add("ring moved");
         public void RingReleased(ScreenPoint origin, ScreenPoint current) => Calls.Add("ring released");
@@ -61,7 +62,8 @@ public class GestureStateMachineTests
         Assert.Equal(GesturePhase.Passthrough, _machine.Phase);
         Assert.Contains("replay down 100,100 -> 110,100", _sink.Calls);
         Assert.False(_sink.TimerRunning);
-        Assert.False(_machine.OnRightUp(new ScreenPoint(150, 100)));
+        Assert.True(_machine.OnRightUp(new ScreenPoint(150, 100)));
+        Assert.Equal("replay up", _sink.Calls[^1]);
         Assert.Equal(GesturePhase.Idle, _machine.Phase);
     }
 

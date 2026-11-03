@@ -192,6 +192,8 @@ public sealed class MouseHookService : IGestureSink, IDisposable
 
     public void ReplayDown(ScreenPoint at, ScreenPoint current) => Defer(InputSender.RightDown);
 
+    public void ReplayUp() => Defer(InputSender.RightUp);
+
     public void RingOpened(ScreenPoint origin) => Raise(GestureEventKind.RingOpened, origin, origin);
 
     public void RingMoved(ScreenPoint origin, ScreenPoint current) => Raise(GestureEventKind.RingMoved, origin, current);

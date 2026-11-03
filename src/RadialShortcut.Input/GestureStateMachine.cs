@@ -13,6 +13,7 @@ public interface IGestureSink
     void StopHoldTimer();
     void ReplayClick();
     void ReplayDown(ScreenPoint at, ScreenPoint current);
+    void ReplayUp();
     void RingOpened(ScreenPoint origin);
     void RingMoved(ScreenPoint origin, ScreenPoint current);
     void RingReleased(ScreenPoint origin, ScreenPoint current);
@@ -28,6 +29,7 @@ public sealed class GestureStateMachine(GestureSettings settings, IGestureSink s
 {
     private ScreenPoint _press;
     private bool _swallowOtherUp;
+    private bool _replayedDown;
 
     public GesturePhase Phase { get; private set; } = GesturePhase.Idle;
 
@@ -41,6 +43,7 @@ public sealed class GestureStateMachine(GestureSettings settings, IGestureSink s
                 sink.RingCancelled();
         }
 
+        _replayedDown = false;
         if (!allowed)
         {
             SetPhase(GesturePhase.Passthrough, "Hedef hariç / yönetici / duraklatıldı: geçirildi");
@@ -70,6 +73,7 @@ public sealed class GestureStateMachine(GestureSettings settings, IGestureSink s
             case GesturePhase.Pending when Distance(_press, p) >= settings.DragSlopPx:
                 sink.StopHoldTimer();
                 sink.ReplayDown(_press, p);
+                _replayedDown = true;
                 SetPhase(GesturePhase.Passthrough, $"Hareket ≥ {settings.DragSlopPx} px: normal sağ sürükleme");
                 break;
             case GesturePhase.RingOpen:
@@ -97,6 +101,13 @@ public sealed class GestureStateMachine(GestureSettings settings, IGestureSink s
             case GesturePhase.Swallowing:
                 SetPhase(GesturePhase.Idle, "Sağ tuş bırakıldı ve yutuldu");
                 return true;
+            case GesturePhase.Passthrough when _replayedDown:
+                // The replayed down is still queued behind the hook callback. Letting this real up pass
+                // could land it before that down, leaving Windows with the right button held. Queue our own up after it.
+                _replayedDown = false;
+                sink.ReplayUp();
+                SetPhase(GesturePhase.Idle, "Sağ tuş bırakıldı (tekrar gönderilen basışın ardından)");
+                return true;
             case GesturePhase.Passthrough:
                 SetPhase(GesturePhase.Idle, "Sağ tuş bırakıldı (geçirildi)");
                 return false;
@@ -112,6 +123,7 @@ public sealed class GestureStateMachine(GestureSettings settings, IGestureSink s
             case GesturePhase.Pending:
                 sink.StopHoldTimer();
                 sink.ReplayDown(_press, p);
+                _replayedDown = true;
                 SetPhase(GesturePhase.Passthrough, "Başka tuş basıldı: sağ tuş geçirildi");
                 return false;
             case GesturePhase.RingOpen:
