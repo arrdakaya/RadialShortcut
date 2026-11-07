@@ -487,12 +487,39 @@ public partial class App : Application
     /// <summary>Screen tools freeze the screen first, so the ring has to be gone before they start.</summary>
     private static async Task RunAfterRingFadesAsync(RingItem item, ScreenPoint origin, Task<bool> hidden)
     {
-        if (!await hidden)
-            return;
-        // Wait for the actual animation completion, then let the compositor present the clean screen.
-        await Task.Delay(35);
+        // False only means the fade was cut short (ring rebuilt or reused); the choice still stands.
+        await hidden;
+        await ScreenShowsRingGoneAsync();
         await ToolRunner.RunAsync(item, origin);
     }
+
+    /// <summary>
+    /// Opacity 0 is only a value until WPF has drawn a frame with it and DWM has composed that frame.
+    /// Two rendering ticks make sure the transparent frame was submitted; DwmFlush then waits for the
+    /// compositor to put it on screen, however slow the machine or with animations off.
+    /// </summary>
+    private static async Task ScreenShowsRingGoneAsync()
+    {
+        for (var i = 0; i < 2; i++)
+        {
+            var tick = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            EventHandler handler = (_, _) => tick.TrySetResult();
+            System.Windows.Media.CompositionTarget.Rendering += handler;
+            try
+            {
+                await Task.WhenAny(tick.Task, Task.Delay(100)); // no frame when nothing changes: don't hang
+            }
+            finally
+            {
+                System.Windows.Media.CompositionTarget.Rendering -= handler;
+            }
+        }
+
+        await Task.Run(() => DwmFlush());
+    }
+
+    [System.Runtime.InteropServices.DllImport("dwmapi.dll")]
+    private static extern int DwmFlush();
 
     protected override void OnExit(ExitEventArgs e)
     {
