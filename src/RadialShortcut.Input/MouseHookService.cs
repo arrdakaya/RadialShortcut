@@ -113,7 +113,7 @@ public sealed class MouseHookService : IGestureSink, IDisposable
             try
             {
                 var info = Marshal.PtrToStructure<MSLLHOOKSTRUCT>(lParam);
-                if (info.dwExtraInfo != InputSender.Signature && Handle((int)wParam, new ScreenPoint(info.pt.X, info.pt.Y)))
+                if (info.dwExtraInfo != InputSender.Signature && Handle((int)wParam, new ScreenPoint(info.pt.X, info.pt.Y), info.mouseData))
                     return 1;
             }
             catch
@@ -125,10 +125,10 @@ public sealed class MouseHookService : IGestureSink, IDisposable
         return CallNextHookEx(_hook, nCode, wParam, lParam);
     }
 
-    private bool Handle(int message, ScreenPoint p)
+    private bool Handle(int message, ScreenPoint p, uint mouseData)
     {
         WatchDrag(message, p);
-        return Dispatch(message, p);
+        return Dispatch(message, p, mouseData);
     }
 
     private void WatchDrag(int message, ScreenPoint p)
@@ -156,16 +156,59 @@ public sealed class MouseHookService : IGestureSink, IDisposable
         }
     }
 
-    private bool Dispatch(int message, ScreenPoint p) => message switch
+    private bool Dispatch(int message, ScreenPoint p, uint mouseData)
     {
-        WM_RBUTTONDOWN => _machine.OnRightDown(p, !Paused && _filter.IsAllowed(p)),
-        WM_RBUTTONUP => _machine.OnRightUp(p),
-        WM_MOUSEMOVE => _machine.OnMove(p),
-        WM_LBUTTONDOWN or WM_MBUTTONDOWN or WM_XBUTTONDOWN => _machine.OnOtherButtonDown(p),
-        WM_LBUTTONUP or WM_MBUTTONUP or WM_XBUTTONUP => _machine.OnOtherButtonUp(),
-        WM_MOUSEWHEEL or WM_MOUSEHWHEEL => _machine.OnWheel(),
-        _ => false,
+        switch (message)
+        {
+            case WM_RBUTTONDOWN:
+                if (_machine.Held != OtherButtons.None)
+                    _machine.ForgetReleased(ButtonsDownNow());
+                return _machine.OnRightDown(p, !Paused && _filter.IsAllowed(p));
+            case WM_RBUTTONUP:
+                return _machine.OnRightUp(p);
+            case WM_MOUSEMOVE:
+                return _machine.OnMove(p);
+            case WM_LBUTTONDOWN:
+                return _machine.OnOtherButtonDown(p, OtherButtons.Left);
+            case WM_MBUTTONDOWN:
+                return _machine.OnOtherButtonDown(p, OtherButtons.Middle);
+            case WM_XBUTTONDOWN:
+                return _machine.OnOtherButtonDown(p, XButton(mouseData));
+            case WM_LBUTTONUP:
+                return _machine.OnOtherButtonUp(OtherButtons.Left);
+            case WM_MBUTTONUP:
+                return _machine.OnOtherButtonUp(OtherButtons.Middle);
+            case WM_XBUTTONUP:
+                return _machine.OnOtherButtonUp(XButton(mouseData));
+            case WM_MOUSEWHEEL or WM_MOUSEHWHEEL:
+                return _machine.OnWheel();
+            default:
+                return false;
+        }
+    }
+
+    private static OtherButtons XButton(uint mouseData) => (mouseData >> 16) switch
+    {
+        XBUTTON1 => OtherButtons.X1,
+        XBUTTON2 => OtherButtons.X2,
+        _ => OtherButtons.None,
     };
+
+    /// <summary>
+    /// What Windows says is held right now. GetAsyncKeyState reads physical buttons while the hook
+    /// sees logical ones, so with swapped buttons the logical left is the physical right.
+    /// </summary>
+    private static OtherButtons ButtonsDownNow()
+    {
+        static bool Down(int vk) => (GetAsyncKeyState(vk) & 0x8000) != 0;
+
+        var down = OtherButtons.None;
+        if (Down(GetSystemMetrics(SM_SWAPBUTTON) != 0 ? VK_RBUTTON : VK_LBUTTON)) down |= OtherButtons.Left;
+        if (Down(VK_MBUTTON)) down |= OtherButtons.Middle;
+        if (Down(VK_XBUTTON1)) down |= OtherButtons.X1;
+        if (Down(VK_XBUTTON2)) down |= OtherButtons.X2;
+        return down;
+    }
 
     private void Defer(Action work)
     {

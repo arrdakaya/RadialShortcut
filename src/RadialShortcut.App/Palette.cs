@@ -12,7 +12,7 @@ internal static class Palette
     /// <summary>"system", "light" or "dark", from config.json.</summary>
     public static string Theme { get; set; } = "system";
 
-    public static bool IsDark => Theme.ToLowerInvariant() switch
+    public static bool IsDark => Theme?.ToLowerInvariant() switch
     {
         "light" => false,
         "dark" => true,
@@ -26,8 +26,19 @@ internal static class Palette
     public static Brush Muted => Brush(IsDark ? 0xA8A8A8 : 0x5F6670);
     public static Brush Accent => Brush(0x0067C0);
 
-    /// <summary>The ring's and drop strip's glassy colors; taken once per window, since IsDark reads the registry.</summary>
+    /// <summary>The drop strip's glassy colors; taken once per window, since IsDark reads the registry.</summary>
     public static GlassColors Glass => IsDark ? DarkGlass : LightGlass;
+
+    /// <summary>Opaque matte colors for the ring; frozen per window, with no desktop blur.</summary>
+    public static RingColors Ring => IsDark ? DarkRing : LightRing;
+
+    private static readonly RingColors DarkRing = new(
+        Argb(0xFF25282E), Argb(0xFF292D33), Argb(0xFF292D33), Argb(0xFF25282B),
+        Argb(0xFF50555E), Argb(0xFFE8EAED), Argb(0xFFCFD3DA), Argb(0xFFA6ADB8), 0.28);
+
+    private static readonly RingColors LightRing = new(
+        Argb(0xFFF3F4F6), Argb(0xFFFAFBFC), Argb(0xFFFAFBFC), Argb(0xFFF0F2F5),
+        Argb(0xFFCCD1D9), Argb(0xFF20252D), Argb(0xFF3F4752), Argb(0xFF606B7A), 0.16);
 
     private static readonly GlassColors DarkGlass = new(
         Argb(0xF41E2025), Argb(0xF430333A), Argb(0xF42C2F36), Argb(0xF41A1C21),
@@ -72,3 +83,6 @@ internal static class Palette
 /// <param name="Shadow">Opacity of the strip's drop shadow.</param>
 internal sealed record GlassColors(Color Inner, Color Outer, Color CenterLight, Color CenterDark,
     Color Edge, Color EdgeTop, Color EdgeBottom, Color Text, Color Label, Color Muted, double Shadow);
+
+internal sealed record RingColors(Color Inner, Color Outer, Color CenterLight, Color CenterDark,
+    Color Edge, Color Text, Color Label, Color Muted, double Shadow);

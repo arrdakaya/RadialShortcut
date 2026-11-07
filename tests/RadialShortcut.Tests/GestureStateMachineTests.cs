@@ -87,8 +87,8 @@ public class GestureStateMachineTests
         _machine.OnRightDown(Origin, allowed: true);
         _machine.OnHoldElapsed();
 
-        Assert.True(_machine.OnOtherButtonDown(Origin));
-        Assert.True(_machine.OnOtherButtonUp());
+        Assert.True(_machine.OnOtherButtonDown(Origin, OtherButtons.Left));
+        Assert.True(_machine.OnOtherButtonUp(OtherButtons.Left));
         Assert.Equal(GesturePhase.Swallowing, _machine.Phase);
         Assert.True(_machine.OnRightUp(Origin));
 
@@ -102,9 +102,85 @@ public class GestureStateMachineTests
     {
         _machine.OnRightDown(Origin, allowed: true);
 
-        Assert.False(_machine.OnOtherButtonDown(Origin));
-        Assert.False(_machine.OnOtherButtonUp());
+        Assert.False(_machine.OnOtherButtonDown(Origin, OtherButtons.Left));
+        Assert.False(_machine.OnOtherButtonUp(OtherButtons.Left));
         Assert.Equal(GesturePhase.Passthrough, _machine.Phase);
+    }
+
+    [Theory]
+    [InlineData(OtherButtons.Left)]
+    [InlineData(OtherButtons.Middle)]
+    [InlineData(OtherButtons.X1)]
+    [InlineData(OtherButtons.X2)]
+    public void RightPressWhileOtherButtonHeld_PassesThroughAndNeverOpensRing(OtherButtons held)
+    {
+        _machine.OnOtherButtonDown(Origin, held);
+
+        Assert.False(_machine.OnRightDown(Origin, allowed: true));
+        _machine.OnHoldElapsed();
+        Assert.False(_machine.OnRightUp(Origin));
+
+        Assert.Empty(_sink.Calls);
+        Assert.Equal(GesturePhase.Idle, _machine.Phase);
+    }
+
+    [Fact]
+    public void RightPressAfterOtherButtonReleased_WorksAgain()
+    {
+        _machine.OnOtherButtonDown(Origin, OtherButtons.Left);
+        _machine.OnOtherButtonDown(Origin, OtherButtons.Middle);
+        _machine.OnOtherButtonUp(OtherButtons.Left);
+        Assert.False(_machine.OnRightDown(Origin, allowed: true)); // middle still held
+        _machine.OnRightUp(Origin);
+
+        _machine.OnOtherButtonUp(OtherButtons.Middle);
+        Assert.True(_machine.OnRightDown(Origin, allowed: true));
+        Assert.Equal(GesturePhase.Pending, _machine.Phase);
+    }
+
+    [Fact]
+    public void MissedUp_IsForgottenWhenWindowsSaysButtonIsUp()
+    {
+        _machine.OnOtherButtonDown(Origin, OtherButtons.Left); // its up never arrives
+
+        _machine.ForgetReleased(OtherButtons.None);
+
+        Assert.Equal(OtherButtons.None, _machine.Held);
+        Assert.True(_machine.OnRightDown(Origin, allowed: true));
+    }
+
+    [Fact]
+    public void ForgetReleased_NeverAddsButtons()
+    {
+        _machine.ForgetReleased(OtherButtons.Left | OtherButtons.Middle);
+
+        Assert.Equal(OtherButtons.None, _machine.Held);
+    }
+
+    [Fact]
+    public void SwallowedUp_BelongsToTheButtonWhoseDownWasSwallowed()
+    {
+        _machine.OnRightDown(Origin, allowed: true);
+        _machine.OnHoldElapsed();
+        Assert.True(_machine.OnOtherButtonDown(Origin, OtherButtons.Left)); // swallowed, cancels ring
+        _machine.OnRightUp(Origin);
+
+        // Middle pressed while the swallowed left is still held: it is the app's, both ways.
+        Assert.False(_machine.OnOtherButtonDown(Origin, OtherButtons.Middle));
+        Assert.False(_machine.OnOtherButtonUp(OtherButtons.Middle));
+        Assert.True(_machine.OnOtherButtonUp(OtherButtons.Left));
+    }
+
+    [Fact]
+    public void LeftClickWhileRingOpen_StillLetsTheNextRingOpen()
+    {
+        _machine.OnRightDown(Origin, allowed: true);
+        _machine.OnHoldElapsed();
+        _machine.OnOtherButtonDown(Origin, OtherButtons.Left);
+        _machine.OnOtherButtonUp(OtherButtons.Left);
+        _machine.OnRightUp(Origin);
+
+        Assert.True(_machine.OnRightDown(Origin, allowed: true));
     }
 
     [Fact]

@@ -383,9 +383,9 @@ public partial class App : Application
 
     private static void Release(RingWindow ring, int slice, ScreenPoint origin)
     {
-        ring.Close(slice);
+        var hidden = ring.CloseForActionAsync(slice);
         if (slice >= 0)
-            _ = RunAfterRingFadesAsync(ring.ItemAt(slice), origin);
+            _ = RunAfterRingFadesAsync(ring.ItemAt(slice), origin, hidden);
     }
 
     /// <summary>Half a minute after start, then once a day.</summary>
@@ -485,9 +485,12 @@ public partial class App : Application
     private void OnLibraryClick(object sender, RoutedEventArgs e) => LibraryWindow.ShowOrActivate();
 
     /// <summary>Screen tools freeze the screen first, so the ring has to be gone before they start.</summary>
-    private static async Task RunAfterRingFadesAsync(RingItem item, ScreenPoint origin)
+    private static async Task RunAfterRingFadesAsync(RingItem item, ScreenPoint origin, Task<bool> hidden)
     {
-        await Task.Delay(200);
+        if (!await hidden)
+            return;
+        // Wait for the actual animation completion, then let the compositor present the clean screen.
+        await Task.Delay(35);
         await ToolRunner.RunAsync(item, origin);
     }
 

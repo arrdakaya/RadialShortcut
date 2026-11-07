@@ -66,7 +66,7 @@ public class RingCatalogTests
     [Fact]
     public void ExampleConfigLoadsCleanly()
     {
-        var file = Path.Combine(AppContext.BaseDirectory, "../../../../../src/RadialShortcut.App/config.example.json");
+        var file = Path.Combine(AppContext.BaseDirectory, "config.example.json");
         var settings = UserSettings.Parse(File.ReadAllText(file));
         var catalog = new RingCatalog(settings.Rings, 8);
         Assert.Empty(catalog.Warnings);

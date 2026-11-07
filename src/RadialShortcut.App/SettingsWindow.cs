@@ -46,7 +46,7 @@ internal sealed class SettingsWindow : Window
         ("text", T("Metin yapıştır", "Paste text"), "M5 6h14 M5 10h14 M5 14h9 M5 18h6"),
     ];
     private static readonly double[] Scales = [0.85, 1, 1.15, 1.3];
-    private static readonly string[] Accents = ["#3D8BFF", "#8B5CF6", "#EC4899", "#EF4444", "#F59E0B", "#22C55E", "#14B8A6"];
+    private static readonly string[] Accents = [new RingStyle().Accent, "#8B5CF6", "#EC4899", "#EF4444", "#F59E0B", "#22C55E", "#14B8A6"];
 
     /// <summary>Icons a slice can wear: the tools' own, then some general ones.</summary>
     private static readonly string[] IconChoices =
@@ -1660,7 +1660,7 @@ internal sealed class SettingsWindow : Window
 
     private static Shape IconShape(string data, Brush stroke) => new()
     {
-        Data = Geometry.Parse(data),
+        Data = RingWindow.IconGeometry(data),
         Stroke = stroke,
         StrokeThickness = 1.8,
         StrokeLineJoin = PenLineJoin.Round,

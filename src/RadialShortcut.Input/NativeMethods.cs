@@ -62,6 +62,14 @@ internal static class NativeMethods
     public static extern bool GetMonitorInfo(IntPtr monitor, ref MONITORINFO info);
 
     public const int VK_SHIFT = 0x10;
+    public const int VK_LBUTTON = 0x01;
+    public const int VK_RBUTTON = 0x02;
+    public const int VK_MBUTTON = 0x04;
+    public const int VK_XBUTTON1 = 0x05;
+    public const int VK_XBUTTON2 = 0x06;
+    public const int SM_SWAPBUTTON = 23;
+    public const uint XBUTTON1 = 1;
+    public const uint XBUTTON2 = 2;
 
     [DllImport("user32.dll")]
     public static extern short GetAsyncKeyState(int key);

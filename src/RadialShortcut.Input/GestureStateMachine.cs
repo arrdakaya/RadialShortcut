@@ -6,6 +6,10 @@ public readonly record struct ScreenPoint(int X, int Y);
 
 public enum GesturePhase { Idle, Pending, RingOpen, Swallowing, Passthrough }
 
+/// <summary>Mouse buttons other than the right one, as logical buttons (after any left/right swap).</summary>
+[Flags]
+public enum OtherButtons { None = 0, Left = 1, Middle = 2, X1 = 4, X2 = 8 }
+
 /// <summary>Side effects the state machine asks for. Called synchronously from inside the hook callback.</summary>
 public interface IGestureSink
 {
@@ -28,10 +32,23 @@ public interface IGestureSink
 public sealed class GestureStateMachine(GestureSettings settings, IGestureSink sink)
 {
     private ScreenPoint _press;
-    private bool _swallowOtherUp;
+    private OtherButtons _swallowUps; // buttons whose down we swallowed, so their up is swallowed too
     private bool _replayedDown;
 
     public GesturePhase Phase { get; private set; } = GesturePhase.Idle;
+
+    /// <summary>Other buttons currently held, as seen through this machine's own down/up events.</summary>
+    public OtherButtons Held { get; private set; }
+
+    /// <summary>
+    /// Drops held buttons that are no longer down, for when their up event never reached us
+    /// (e.g. secure desktop). Never adds: <paramref name="stillDown"/> only narrows <see cref="Held"/>.
+    /// </summary>
+    public void ForgetReleased(OtherButtons stillDown)
+    {
+        Held &= stillDown;
+        _swallowUps &= stillDown;
+    }
 
     public bool OnRightDown(ScreenPoint p, bool allowed)
     {
@@ -50,8 +67,14 @@ public sealed class GestureStateMachine(GestureSettings settings, IGestureSink s
             return false;
         }
 
+        if (Held != OtherButtons.None)
+        {
+            // Right pressed during a left drag, a selection or game input: that chord belongs to the app.
+            SetPhase(GesturePhase.Passthrough, $"Başka tuş basılı ({Held}): geçirildi");
+            return false;
+        }
+
         _press = p;
-        _swallowOtherUp = false;
         SetPhase(GesturePhase.Pending, "Sağ tuş basıldı, bekleniyor");
         sink.StartHoldTimer(settings.HoldDelayMs);
         return true;
@@ -116,8 +139,9 @@ public sealed class GestureStateMachine(GestureSettings settings, IGestureSink s
         }
     }
 
-    public bool OnOtherButtonDown(ScreenPoint p)
+    public bool OnOtherButtonDown(ScreenPoint p, OtherButtons button)
     {
+        Held |= button;
         switch (Phase)
         {
             case GesturePhase.Pending:
@@ -128,23 +152,24 @@ public sealed class GestureStateMachine(GestureSettings settings, IGestureSink s
                 return false;
             case GesturePhase.RingOpen:
                 sink.RingCancelled();
-                _swallowOtherUp = true;
+                _swallowUps |= button;
                 SetPhase(GesturePhase.Swallowing, "Başka tuş: halka iptal");
                 return true;
             case GesturePhase.Swallowing:
-                _swallowOtherUp = true;
+                _swallowUps |= button;
                 return true;
             default:
                 return false;
         }
     }
 
-    public bool OnOtherButtonUp()
+    public bool OnOtherButtonUp(OtherButtons button)
     {
-        if (!_swallowOtherUp)
+        Held &= ~button;
+        if ((_swallowUps & button) == 0)
             return false;
 
-        _swallowOtherUp = false;
+        _swallowUps &= ~button;
         return true;
     }
 

@@ -5,6 +5,7 @@
     <Project Path="src/RadialShortcut.Input/RadialShortcut.Input.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/RadialShortcut.App.Tests/RadialShortcut.App.Tests.csproj" />
     <Project Path="tests/RadialShortcut.Tests/RadialShortcut.Tests.csproj" />
   </Folder>
 </Solution>

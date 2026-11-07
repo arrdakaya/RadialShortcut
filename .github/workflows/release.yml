@@ -38,7 +38,7 @@ jobs:
 
       - name: Test
         if: steps.version.outputs.skip != 'True'
-        run: dotnet test tests/RadialShortcut.Tests -c Release
+        run: dotnet test RadialShortcut.slnx -c Release
 
       - name: Publish
         if: steps.version.outputs.skip != 'True'
