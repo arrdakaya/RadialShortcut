@@ -385,7 +385,7 @@ public partial class App : Application
     {
         var hidden = ring.CloseForActionAsync(slice);
         if (slice >= 0)
-            _ = RunAfterRingFadesAsync(ring.ItemAt(slice), origin, hidden);
+            _ = RunAfterRingFadesAsync(ring, ring.ItemAt(slice), origin, hidden);
     }
 
     /// <summary>Half a minute after start, then once a day.</summary>
@@ -485,10 +485,11 @@ public partial class App : Application
     private void OnLibraryClick(object sender, RoutedEventArgs e) => LibraryWindow.ShowOrActivate();
 
     /// <summary>Screen tools freeze the screen first, so the ring has to be gone before they start.</summary>
-    private static async Task RunAfterRingFadesAsync(RingItem item, ScreenPoint origin, Task<bool> hidden)
+    private static async Task RunAfterRingFadesAsync(RingWindow ring, RingItem item, ScreenPoint origin, Task<bool> hidden)
     {
         // False only means the fade was cut short (ring rebuilt or reused); the choice still stands.
-        await hidden;
+        if (await hidden)
+            ring.HideFromScreen(); // not when reused: the ring may already be open again
         await ScreenShowsRingGoneAsync();
         await ToolRunner.RunAsync(item, origin);
     }

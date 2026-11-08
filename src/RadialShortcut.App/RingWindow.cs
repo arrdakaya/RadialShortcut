@@ -298,6 +298,16 @@ public sealed class RingWindow : Window
         return completion.Task;
     }
 
+    /// <summary>
+    /// Takes the window itself off screen. A transparent layered window can still show its last
+    /// opaque frame for a moment, so screen tools do not rely on opacity alone. Open shows it again.
+    /// </summary>
+    internal void HideFromScreen()
+    {
+        if (_hwnd != IntPtr.Zero)
+            SetWindowPos(_hwnd, IntPtr.Zero, 0, 0, 0, 0, SWP_HIDEWINDOW | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+    }
+
     /// <summary>-1 in the center disc and also well outside the ring: releasing far away closes it.</summary>
     public int SliceAt(ScreenPoint point)
     {
@@ -647,6 +657,10 @@ public sealed class RingWindow : Window
     private const uint MONITOR_DEFAULTTONEAREST = 2;
     private const uint SWP_NOACTIVATE = 0x0010;
     private const uint SWP_SHOWWINDOW = 0x0040;
+    private const uint SWP_HIDEWINDOW = 0x0080;
+    private const uint SWP_NOSIZE = 0x0001;
+    private const uint SWP_NOMOVE = 0x0002;
+    private const uint SWP_NOZORDER = 0x0004;
     private static readonly IntPtr HWND_TOPMOST = new(-1);
 
     [StructLayout(LayoutKind.Sequential)]
