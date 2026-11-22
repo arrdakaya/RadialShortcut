@@ -30,7 +30,8 @@
 **File tools**
 - **Convert** images, video, audio and PDF
 - **Compress** and **resize**, with size estimates before you pick
-- **Trim video**, **annotate** images, **remove backgrounds**
+- **Trim video**: cut pieces out of one or more videos, reorder them and join them into one clip
+- **Annotate** images, **remove backgrounds**
 - **Download** video or audio from a link
 - **Unlock** a file by closing whatever holds it
 - A **library** of everything you've captured and made

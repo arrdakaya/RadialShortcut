@@ -164,3 +164,133 @@ public class ScrollProfileTests
         Assert.Equal(p[0], p[1]);
     }
 }
+
+public class VideoCutsTests
+{
+    private static Cut C(double a, double b) => new(TimeSpan.FromSeconds(a), TimeSpan.FromSeconds(b));
+
+    [Fact]
+    public void CleanClampsDropsShortAndKeepsOrder()
+    {
+        var kept = VideoCuts.Clean([C(20, 40), C(-1, 2), C(5, 5.1), C(50, 99)], TimeSpan.FromSeconds(60));
+        Assert.Equal([C(20, 40), C(0, 2), C(50, 60)], kept);
+        Assert.Equal(TimeSpan.FromSeconds(32), VideoCuts.Total(kept));
+    }
+
+    [Fact]
+    public void FilterTrimsAndConcatsEveryPiece()
+    {
+        Assert.Equal(
+            "[0:v:0]trim=start=1.5:end=4,setpts=PTS-STARTPTS[v0];[0:a:0]atrim=start=1.5:end=4,asetpts=PTS-STARTPTS[a0];" +
+            "[0:v:0]trim=start=10:end=12.25,setpts=PTS-STARTPTS[v1];[0:a:0]atrim=start=10:end=12.25,asetpts=PTS-STARTPTS[a1];" +
+            "[v0][a0][v1][a1]concat=n=2:v=1:a=1[v][a]",
+            VideoCuts.Filter([C(1.5, 4), C(10, 12.25)], video: true, audio: true));
+        Assert.Equal(
+            "[0:v:0]trim=start=0:end=1,setpts=PTS-STARTPTS[v0];[0:v:0]trim=start=3:end=4,setpts=PTS-STARTPTS[v1];[v0][v1]concat=n=2:v=1:a=0[v]",
+            VideoCuts.Filter([C(0, 1), C(3, 4)], video: true, audio: false));
+    }
+
+    [Fact]
+    public void ConcatListEscapesQuotes()
+    {
+        Assert.Equal("ffconcat version 1.0\nfile 'C:\\a\\it'\\''s.mp4'\ninpoint 1.5\noutpoint 4\n",
+            VideoCuts.ConcatList(@"C:\a\it's.mp4", [C(1.5, 4)]));
+    }
+
+    [Fact]
+    public void SplitRefusesNearEdges()
+    {
+        var cuts = new List<Cut> { C(0, 10) };
+        Assert.False(VideoCuts.Split(cuts, 0, TimeSpan.FromSeconds(0.1)));
+        Assert.True(VideoCuts.Split(cuts, 0, TimeSpan.FromSeconds(4)));
+        Assert.Equal([C(0, 4), C(4, 10)], cuts);
+        Assert.Equal(1, VideoCuts.IndexAt(cuts, 0, TimeSpan.FromSeconds(4)));
+        Assert.Equal(-1, VideoCuts.IndexAt(cuts, 0, TimeSpan.FromSeconds(10)));
+    }
+}
+
+public class JoinFilesTests
+{
+    private static Cut C(double a, double b, int source) => new(TimeSpan.FromSeconds(a), TimeSpan.FromSeconds(b), source);
+
+    private const string Phone = """
+          Duration: 00:01:02.50, start: 0.000000, bitrate: 9000 kb/s
+          Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(tv, bt709, progressive), 1920x1080 [SAR 1:1 DAR 16:9], 8800 kb/s, 29.97 fps, 29.97 tbr, 90k tbn (default)
+              Side data:
+                displaymatrix: rotation of -90.00 degrees
+          Stream #0:1[0x2](und): Audio: aac (LC) (mp4a / 0x6134706D), 48000 Hz, stereo, fltp, 192 kb/s (default)
+        """;
+
+    [Fact]
+    public void ProbeReadsTurnedSizeCodecsAndLength()
+    {
+        var info = MediaProbe.Parse(Phone);
+        Assert.Equal(new MediaInfo(true, true, 1080, 1920, 29.97, "h264", "aac", 48000, new TimeSpan(0, 0, 1, 2, 500)), info);
+    }
+
+    [Fact]
+    public void ProbeIgnoresCoverArt()
+    {
+        var info = MediaProbe.Parse("""
+              Stream #0:0: Audio: mp3 (mp3float), 44100 Hz, mono, fltp, 64 kb/s
+              Stream #0:1: Video: mjpeg (Baseline), yuvj420p(pc), 64x64 [SAR 1:1 DAR 1:1], 90k tbr, 90k tbn (attached pic)
+            """);
+        Assert.False(info.Video);
+        Assert.True(info.Audio);
+        Assert.Equal(44100, info.SampleRate);
+    }
+
+    [Fact]
+    public void InputsListsEachFileOnceInOrderOfUse()
+    {
+        var (files, cuts) = VideoCuts.Inputs([C(0, 1, 3), C(0, 1, 1), C(2, 3, 3)]);
+        Assert.Equal([3, 1], files);
+        Assert.Equal([C(0, 1, 0), C(0, 1, 1), C(2, 3, 0)], cuts);
+    }
+
+    [Fact]
+    public void JoinFormatTakesTheFirstPicture()
+    {
+        MediaInfo[] inputs = [new(false, true), new(true, false, 1281, 721, 59.94)];
+        Assert.Equal(new JoinFormat(true, true, 1280, 720, 60), JoinFormat.For([C(0, 1, 0), C(0, 1, 1)], inputs));
+        Assert.Equal(new JoinFormat(false, true, 1280, 720, 30), JoinFormat.For([C(0, 1, 0)], inputs));
+    }
+
+    [Fact]
+    public void JoinFilterFillsMissingPictureAndSound()
+    {
+        MediaInfo[] inputs = [new(true, false, 640, 480, 25), new(false, true)];
+        var filter = VideoCuts.JoinFilter([C(1, 2, 0), C(0, 1.5, 1)], inputs, new JoinFormat(true, true, 640, 480, 25));
+        Assert.Equal(
+            "[0:v:0]trim=start=1:end=2,setpts=PTS-STARTPTS,scale=640:480:force_original_aspect_ratio=decrease,pad=640:480:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=25,format=yuv420p[v0];" +
+            "anullsrc=r=48000:cl=stereo,atrim=duration=1,aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo[a0];" +
+            "color=c=black:s=640x480:r=25:d=1.5,setsar=1,fps=25,format=yuv420p[v1];" +
+            "[1:a:0]atrim=start=0:end=1.5,asetpts=PTS-STARTPTS,aresample=48000,aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo[a1];" +
+            "[v0][a0][v1][a1]concat=n=2:v=1:a=1[v][a]",
+            filter);
+    }
+
+    [Fact]
+    public void CopyOnlyForFilesMadeAlike()
+    {
+        var a = new MediaInfo(true, true, 1920, 1080, 30, "h264", "aac", 48000);
+        Assert.True(VideoCuts.CanCopy(["a.mp4", "b.MP4"], [a, a with { Fps = 29.97 }]));
+        Assert.False(VideoCuts.CanCopy(["a.mp4", "b.mp4"], [a, a with { Width = 1280 }]));
+        Assert.False(VideoCuts.CanCopy(["a.mp4", "b.mov"], [a, a]));
+        Assert.False(VideoCuts.CanCopy(["a.mp4", "b.mp4"], [a, a with { Audio = false, AudioCodec = null }]));
+    }
+
+    [Fact]
+    public void ConcatListNamesEachPiecesFile()
+    {
+        Assert.Equal("ffconcat version 1.0\nfile 'b.mp4'\ninpoint 0\noutpoint 1\nfile 'a.mp4'\ninpoint 2\noutpoint 3\n",
+            VideoCuts.ConcatList(["a.mp4", "b.mp4"], [C(0, 1, 1), C(2, 3, 0)]));
+    }
+
+    [Fact]
+    public void CleanClampsEachPieceToItsOwnFile()
+    {
+        var kept = VideoCuts.Clean([C(0, 99, 0), C(0, 99, 1)], [TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(20)]);
+        Assert.Equal([C(0, 10, 0), C(0, 20, 1)], kept);
+    }
+}

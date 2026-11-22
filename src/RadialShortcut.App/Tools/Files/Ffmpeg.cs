@@ -3,6 +3,7 @@ using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
+using RadialShortcut.Core;
 
 namespace RadialShortcut.App.Tools;
 
@@ -12,8 +13,9 @@ internal static partial class Ffmpeg
     /// <param name="before">Options that must come before -i, such as a seek.</param>
     /// <param name="progress">0–100, once the length of the input is known. Called off the UI thread.</param>
     /// <param name="stretch">Output length over input length, when a filter changes the speed.</param>
+    /// <param name="moreInputs">Further -i inputs, numbered 1, 2… in filters; options in <paramref name="before"/> apply to the first only.</param>
     public static async Task RunAsync(string input, IEnumerable<string> args, string output, Action<double>? progress, CancellationToken cancel,
-        IEnumerable<string>? before = null, TimeSpan? length = null, double stretch = 1)
+        IEnumerable<string>? before = null, TimeSpan? length = null, double stretch = 1, IEnumerable<string>? moreInputs = null)
     {
         var start = new ProcessStartInfo(ToolDeps.PathOf(ToolDeps.Ffmpeg))
         {
@@ -23,7 +25,7 @@ internal static partial class Ffmpeg
             RedirectStandardError = true,
             StandardErrorEncoding = Encoding.UTF8,
         };
-        foreach (var a in (IEnumerable<string>)["-hide_banner", "-nostdin", "-y", "-progress", "pipe:1", "-nostats", .. before ?? [], "-i", input, .. args, output])
+        foreach (var a in (IEnumerable<string>)["-hide_banner", "-nostdin", "-y", "-progress", "pipe:1", "-nostats", .. before ?? [], "-i", input, .. (moreInputs ?? []).SelectMany(m => (string[])["-i", m]), .. args, output])
             start.ArgumentList.Add(a);
 
         using var process = Process.Start(start)!;
@@ -66,6 +68,29 @@ internal static partial class Ffmpeg
             var last = errors.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).TakeLast(2);
             throw new InvalidOperationException("ffmpeg: " + string.Join(" ", last));
         }
+    }
+
+    /// <summary>The file's picture and sound streams (cover art doesn't count as a picture).</summary>
+    public static async Task<MediaInfo> ProbeAsync(string input, CancellationToken cancel)
+    {
+        var start = new ProcessStartInfo(ToolDeps.PathOf(ToolDeps.Ffmpeg))
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardError = true,
+            StandardErrorEncoding = Encoding.UTF8,
+        };
+        foreach (var a in (string[])["-hide_banner", "-nostdin", "-i", input])
+            start.ArgumentList.Add(a);
+
+        // With no output ffmpeg lists the streams and exits with an error, which is expected here.
+        using var process = Process.Start(start)!;
+        var text = await process.StandardError.ReadToEndAsync(cancel);
+        await process.WaitForExitAsync(cancel);
+        var info = MediaProbe.Parse(text);
+        if (!info.Video && !info.Audio)
+            throw new InvalidOperationException($"ffmpeg: {Path.GetFileName(input)}: no video or audio stream");
+        return info;
     }
 
     [GeneratedRegex(@"Duration: (\d+:\d+:\d+\.\d+)")]
