@@ -102,7 +102,8 @@ internal sealed class AnnotateWindow : Window
         _stage.MouseLeftButtonDown += OnDown;
         _stage.MouseMove += OnMove;
         _stage.MouseLeftButtonUp += OnUp;
-        _stage.Cursor = Cursors.Cross;
+        _stage.Cursor = RadialShortcut.App.Capture.CrosshairCursor.For(VisualTreeHelper.GetDpi(this).DpiScaleX);
+        DpiChanged += (_, e) => _stage.Cursor = RadialShortcut.App.Capture.CrosshairCursor.For(e.NewDpi.DpiScaleX);
 
         var root = new DockPanel();
         var bar = Toolbar();

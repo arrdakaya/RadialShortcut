@@ -21,7 +21,7 @@ internal abstract class FrozenOverlay : Window
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
         Topmost = true;
-        Cursor = Cursors.Cross;
+        Cursor = CrosshairCursor.For(display.Scale);
         FontFamily = new FontFamily("Segoe UI Variable Text, Segoe UI");
 
         var image = new Image { Source = frozen, Stretch = Stretch.Fill };
