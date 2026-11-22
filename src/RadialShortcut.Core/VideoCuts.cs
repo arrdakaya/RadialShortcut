@@ -88,7 +88,8 @@ public static class VideoCuts
     /// A -filter_complex that trims each piece out of its input and concatenates them, ending in
     /// [v] and/or [a]. For pieces of one file, which already match each other.
     /// </summary>
-    public static string Filter(IReadOnlyList<Cut> cuts, bool video, bool audio)
+    /// <param name="crops">Per input, a filter such as crop=... to put on its picture, or null.</param>
+    public static string Filter(IReadOnlyList<Cut> cuts, bool video, bool audio, IReadOnlyList<string?>? crops = null)
     {
         Check(cuts, video, audio);
         var graph = new StringBuilder();
@@ -96,7 +97,7 @@ public static class VideoCuts
         {
             var c = cuts[i];
             if (video)
-                graph.Append($"[{c.Source}:v:0]trim={Range(c)},setpts=PTS-STARTPTS[v{i}];");
+                graph.Append($"[{c.Source}:v:0]trim={Range(c)},setpts=PTS-STARTPTS{Then(crops, c.Source)}[v{i}];");
             if (audio)
                 graph.Append($"[{c.Source}:a:0]atrim={Range(c)},asetpts=PTS-STARTPTS[a{i}];");
         }
@@ -108,7 +109,7 @@ public static class VideoCuts
     /// frame rate and its sound resampled, as concat needs; a piece without a picture gets black
     /// and one without sound gets silence, so the picture and the sound stay in step.
     /// </summary>
-    public static string JoinFilter(IReadOnlyList<Cut> cuts, IReadOnlyList<MediaInfo> inputs, JoinFormat format)
+    public static string JoinFilter(IReadOnlyList<Cut> cuts, IReadOnlyList<MediaInfo> inputs, JoinFormat format, IReadOnlyList<string?>? crops = null)
     {
         Check(cuts, format.Video, format.Audio);
         var size = $"{format.Width}x{format.Height}";
@@ -120,7 +121,7 @@ public static class VideoCuts
             if (format.Video)
             {
                 graph.Append(source.Video
-                    ? $"[{c.Source}:v:0]trim={Range(c)},setpts=PTS-STARTPTS,scale={format.Width}:{format.Height}:force_original_aspect_ratio=decrease,pad={format.Width}:{format.Height}:(ow-iw)/2:(oh-ih)/2:color=black,"
+                    ? $"[{c.Source}:v:0]trim={Range(c)},setpts=PTS-STARTPTS{Then(crops, c.Source)},scale={format.Width}:{format.Height}:force_original_aspect_ratio=decrease,pad={format.Width}:{format.Height}:(ow-iw)/2:(oh-ih)/2:color=black,"
                     : $"color=c=black:s={size}:r={format.Fps}:d={Seconds(c.Length)},");
                 graph.Append($"setsar=1,fps={format.Fps},format=yuv420p[v{i}];");
             }
@@ -133,6 +134,21 @@ public static class VideoCuts
             }
         }
         return Concat(graph, cuts.Count, format.Video, format.Audio);
+    }
+
+    public const int GifFps = 15, GifWidth = 960;
+
+    /// <summary>
+    /// What turns the joined picture [v] into [gif]: fewer frames, at most <see cref="GifWidth"/>
+    /// wide, and a palette made from the clip itself, which keeps screen text sharp where GIF's
+    /// fixed 256 colours would smear it. <paramref name="width"/> is the picture's, 0 if unknown.
+    /// </summary>
+    public static string GifTail(int width)
+    {
+        var scale = width > 0
+            ? $"scale={Math.Max(2, Math.Min(width, GifWidth) / 2 * 2)}:-2:flags=lanczos"
+            : $"scale='min({GifWidth},iw)':-2:flags=lanczos"; // quoted, or the comma would end the filter
+        return $";[v]fps={GifFps},{scale},split[g0][g1];[g0]palettegen=stats_mode=diff[p];[g1][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle[gif]";
     }
 
     /// <summary>
@@ -201,6 +217,9 @@ public static class VideoCuts
     }
 
     public static string Seconds(TimeSpan t) => t.TotalSeconds.ToString("0.###", CultureInfo.InvariantCulture);
+
+    private static string Then(IReadOnlyList<string?>? filters, int input) =>
+        filters is not null && input < filters.Count && !string.IsNullOrEmpty(filters[input]) ? "," + filters[input] : "";
 
     private static string Range(Cut c) => $"start={Seconds(c.Start)}:end={Seconds(c.End)}";
 

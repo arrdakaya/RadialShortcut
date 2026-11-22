@@ -30,7 +30,8 @@
 **File tools**
 - **Convert** images, video, audio and PDF
 - **Compress** and **resize**, with size estimates before you pick
-- **Trim video**: cut pieces out of one or more videos, reorder them and join them into one clip
+- **Trim video**: a timeline editor for one or more videos: split, delete, drag pieces to reorder and
+  their edges to trim, and play the result straight through; crop the picture to one window, drop the sound, or save as GIF
 - **Annotate** images, **remove backgrounds**
 - **Download** video or audio from a link
 - **Unlock** a file by closing whatever holds it

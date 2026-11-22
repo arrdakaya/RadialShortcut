@@ -294,3 +294,257 @@ public class JoinFilesTests
         Assert.Equal([C(0, 10, 0), C(0, 20, 1)], kept);
     }
 }
+
+public class VideoCropTests
+{
+    [Fact]
+    public void BetweenOrdersCornersAndDropsStrayClicks()
+    {
+        Assert.Equal(new CropArea(0.25, 0.5, 0.5, 0.25), CropArea.Between(0.75, 0.75, 0.25, 0.5));
+        Assert.Null(CropArea.Between(0.5, 0.5, 0.51, 0.9));
+        Assert.Null(CropArea.Between(-1, -1, 2, 2)); // the whole picture is no crop
+    }
+
+    [Fact]
+    public void MovingStopsAtThePictureEdges()
+    {
+        var a = new CropArea(0.1, 0.1, 0.5, 0.5);
+        Assert.Equal(new CropArea(0.5, 0, 0.5, 0.5), a.Moved(0.9, -0.9));
+    }
+
+    [Fact]
+    public void DraggingAnEdgeNeverCrossesTheOther()
+    {
+        var a = new CropArea(0.2, 0.2, 0.4, 0.4);
+        var dragged = a.Dragged(CropEdges.Left | CropEdges.Top, 0.9, 0.1);
+        Assert.Equal(0.6 - CropArea.Smallest, dragged.X, 6);
+        Assert.Equal(0.1, dragged.Y, 6);
+        Assert.Equal(0.6, dragged.Right, 6);
+        Assert.Equal(0.6, dragged.Bottom, 6);
+    }
+
+    [Fact]
+    public void HitTestFindsCornersEdgesAndInside()
+    {
+        var a = new CropArea(0.2, 0.2, 0.4, 0.4);
+        Assert.Equal(CropEdges.Left | CropEdges.Top, a.HitTest(0.21, 0.19, 0.02, 0.02));
+        Assert.Equal(CropEdges.Right, a.HitTest(0.6, 0.4, 0.02, 0.02));
+        Assert.Equal(CropEdges.Move, a.HitTest(0.4, 0.4, 0.02, 0.02));
+        Assert.Equal(CropEdges.None, a.HitTest(0.9, 0.9, 0.02, 0.02));
+    }
+
+    [Fact]
+    public void PixelsAreEvenAndInsideThePicture()
+    {
+        Assert.Equal(new PixelCrop(192, 108, 960, 540), new CropArea(0.1, 0.1, 0.5, 0.5).ToPixels(1920, 1080));
+        var p = new CropArea(0.5, 0.5, 0.5, 0.5).ToPixels(1281, 721);
+        Assert.True(p.Width % 2 == 0 && p.Height % 2 == 0);
+        Assert.True(p.X + p.Width <= 1281 && p.Y + p.Height <= 721);
+        Assert.Equal("crop=960:540:192:108", new CropArea(0.1, 0.1, 0.5, 0.5).Filter(1920, 1080));
+        Assert.StartsWith("crop=trunc(iw*0.5/2)*2", new CropArea(0.1, 0.1, 0.5, 0.5).Filter(0, 0));
+    }
+
+    [Fact]
+    public void FiltersCropBeforeFittingTheJoinedSize()
+    {
+        var c = new Cut(TimeSpan.Zero, TimeSpan.FromSeconds(1), 0);
+        Assert.Equal("[0:v:0]trim=start=0:end=1,setpts=PTS-STARTPTS,crop=2:2:0:0[v0];[v0]concat=n=1:v=1:a=0[v]",
+            VideoCuts.Filter([c], true, false, ["crop=2:2:0:0"]));
+        var join = VideoCuts.JoinFilter([c], [new MediaInfo(true, false, 640, 480, 30)], new JoinFormat(true, false, 320, 240, 30), ["crop=320:240:0:0"]);
+        Assert.StartsWith("[0:v:0]trim=start=0:end=1,setpts=PTS-STARTPTS,crop=320:240:0:0,scale=320:240", join);
+        Assert.Equal(new MediaInfo(true, true, 960, 540), new CropArea(0.1, 0.1, 0.5, 0.5).Apply(new MediaInfo(true, true, 1920, 1080)));
+    }
+}
+public class TimelineTests
+{
+    private static TimeSpan S(double s) => TimeSpan.FromSeconds(s);
+
+    [Fact]
+    public void ZoomKeepsThePointUnderTheMouseInPlace()
+    {
+        var view = TimelineView.All(S(100)).Zoomed(0.5, S(25), S(100));
+        Assert.Equal(new TimelineView(S(12.5), S(50)), view);
+        Assert.Equal(S(25), view.ToTime(view.ToX(S(25), 800), 800));
+    }
+
+    [Fact]
+    public void ZoomStaysInsideTheFileAndStopsAtTheNarrowest()
+    {
+        var view = TimelineView.All(S(100)).Zoomed(0.001, S(99), S(100));
+        Assert.Equal(TimelineView.Narrowest, view.Length);
+        Assert.InRange(S(99), view.Start, view.End);
+        Assert.Equal(new TimelineView(S(98), S(2)), new TimelineView(S(90), S(10)).Zoomed(0.001, S(100), S(100))); // the end stays the end
+        Assert.Equal(TimelineView.All(S(100)), view.Zoomed(1000, S(50), S(100)));
+    }
+
+    [Fact]
+    public void PanningAndFollowingStopAtTheEnds()
+    {
+        var view = new TimelineView(S(10), S(10));
+        Assert.Equal(new TimelineView(S(0), S(10)), view.Panned(S(-50), S(100)));
+        Assert.Equal(new TimelineView(S(90), S(10)), view.Panned(S(500), S(100)));
+        Assert.Equal(view, view.Showing(S(15), S(100)));
+        Assert.Equal(new TimelineView(S(24), S(10)), view.Showing(S(25), S(100)));
+    }
+
+    [Fact]
+    public void EdgeIsFoundWithinTolerance()
+    {
+        Cut[] cuts = [new(S(10), S(20), 0), new(S(20), S(30), 1), new(S(40), S(50), 0)];
+        var view = TimelineView.All(S(100)); // 10 px a second over 1000 px
+        Assert.Equal(new CutEdge(0, true), CutEdges.At(cuts, 0, view, 1000, 203, 6));
+        Assert.Equal(new CutEdge(2, false), CutEdges.At(cuts, 0, view, 1000, 398, 6));
+        Assert.Null(CutEdges.At(cuts, 0, view, 1000, 300, 6)); // that edge is file 1's
+    }
+
+    [Fact]
+    public void MovedEdgeKeepsThePieceInTheFileAndLongEnough()
+    {
+        var c = new Cut(S(10), S(20));
+        Assert.Equal(new Cut(S(10), S(30)), CutEdges.Move(c, true, S(99), S(30)));
+        Assert.Equal(new Cut(S(10), S(10) + VideoCuts.Shortest), CutEdges.Move(c, true, S(5), S(30)));
+        Assert.Equal(new Cut(S(0), S(20)), CutEdges.Move(c, false, S(-3), S(30)));
+        Assert.Equal(new Cut(S(20) - VideoCuts.Shortest, S(20)), CutEdges.Move(c, false, S(25), S(30)));
+    }
+}
+
+public class WaveformTests
+{
+    [Fact]
+    public void EachPeakIsTheLoudestOfItsSamples()
+    {
+        var per = Waveform.SamplesPerPeak;
+        var bytes = new byte[(per + 1) * 2];
+        BitConverter.GetBytes((short)-16384).CopyTo(bytes, 2 * 3); // half scale in the first peak
+        BitConverter.GetBytes(short.MaxValue).CopyTo(bytes, 2 * per); // the lone sample of the second
+        var peaks = Waveform.Peaks(bytes);
+        Assert.Equal(2, peaks.Length);
+        Assert.Equal(0.5f, peaks[0], 3);
+        Assert.Equal(1f, peaks[1], 3);
+    }
+
+    [Fact]
+    public void MaxCoversFractionalRangesAndStaysInBounds()
+    {
+        float[] peaks = [0.1f, 0.9f, 0.2f];
+        Assert.Equal(0.9f, Waveform.Max(peaks, 0.5, 1.2));
+        Assert.Equal(0.1f, Waveform.Max(peaks, 0.2, 0.4));
+        Assert.Equal(0.2f, Waveform.Max(peaks, 2.5, 99));
+        Assert.Equal(0f, Waveform.Max([], 0, 1));
+    }
+}
+
+public class GifTests
+{
+    [Fact]
+    public void GifIsNarrowedAndGetsItsOwnPalette()
+    {
+        Assert.Contains("scale=960:-2", VideoCuts.GifTail(1920));
+        Assert.Contains("scale=640:-2", VideoCuts.GifTail(641));
+        Assert.Contains("scale='min(960,iw)':-2", VideoCuts.GifTail(0));
+        Assert.StartsWith(";[v]fps=15,", VideoCuts.GifTail(800));
+        Assert.EndsWith("paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle[gif]", VideoCuts.GifTail(800));
+    }
+}
+
+public class SequenceTests
+{
+    private static TimeSpan S(double s) => TimeSpan.FromSeconds(s);
+
+    // 10 s of file 0 from 5 s, 4 s of file 1 from 0, 6 s of file 0 from 30 s: 20 s in all.
+    private static readonly Cut[] Cuts = [new(S(5), S(15), 0), new(S(0), S(4), 1), new(S(30), S(36), 0)];
+
+    [Fact]
+    public void StartsAreTheLengthsBefore()
+    {
+        Assert.Equal([S(0), S(10), S(14)], Sequence.Starts(Cuts));
+        Assert.Empty(Sequence.Starts([]));
+    }
+
+    [Fact]
+    public void ResultTimeMapsToAPieceAndBack()
+    {
+        Assert.Equal((0, S(5)), Sequence.Locate(Cuts, S(0)));
+        Assert.Equal((0, S(12)), Sequence.Locate(Cuts, S(7)));
+        Assert.Equal((1, S(0)), Sequence.Locate(Cuts, S(10))); // the seam is the later piece's
+        Assert.Equal((2, S(31)), Sequence.Locate(Cuts, S(15)));
+        Assert.Equal((2, S(36)), Sequence.Locate(Cuts, S(99))); // past the end: the last frame
+        Assert.Equal((0, S(5)), Sequence.Locate(Cuts, S(-3)));
+        Assert.Equal((-1, TimeSpan.Zero), Sequence.Locate([], S(1)));
+        foreach (var t in new[] { 0, 3.5, 10, 13.9, 14, 19.5 })
+        {
+            var (i, at) = Sequence.Locate(Cuts, S(t));
+            Assert.Equal(S(t), Sequence.ToResult(Cuts, i, at));
+        }
+        Assert.Equal(S(14), Sequence.ToResult(Cuts, 1, S(99))); // kept inside the piece
+    }
+
+    [Fact]
+    public void LocateEndGivesTheEarlierPieceOnASeam()
+    {
+        Assert.Equal((0, S(15)), Sequence.LocateEnd(Cuts, S(10))); // the piece that ends there
+        Assert.Equal((1, S(1)), Sequence.LocateEnd(Cuts, S(11)));
+        Assert.Equal((0, S(5)), Sequence.LocateEnd(Cuts, S(0)));
+        Assert.Equal((2, S(36)), Sequence.LocateEnd(Cuts, S(20)));
+        Assert.Equal((2, S(36)), Sequence.LocateEnd(Cuts, S(99)));
+        Assert.Equal((-1, TimeSpan.Zero), Sequence.LocateEnd([], S(1)));
+    }
+
+    [Fact]
+    public void IndexAtIsMinusOneOutsideThePieces()
+    {
+        Assert.Equal(1, Sequence.IndexAt(Cuts, S(10)));
+        Assert.Equal(-1, Sequence.IndexAt(Cuts, S(20)));
+        Assert.Equal(-1, Sequence.IndexAt(Cuts, S(-1)));
+    }
+
+    [Fact]
+    public void DropSlotSplitsEachPieceInHalves()
+    {
+        Assert.Equal(0, Sequence.DropSlot(Cuts, S(4)));
+        Assert.Equal(1, Sequence.DropSlot(Cuts, S(6)));
+        Assert.Equal(2, Sequence.DropSlot(Cuts, S(12.5)));
+        Assert.Equal(3, Sequence.DropSlot(Cuts, S(18)));
+        Assert.Equal(0, Sequence.DropSlot([], S(1)));
+    }
+
+    [Fact]
+    public void MoveTakesSlotsCountedBeforeTheMove()
+    {
+        var cuts = Cuts.ToList();
+        Assert.Equal(2, Sequence.Move(cuts, 0, 3)); // first to the end
+        Assert.Equal([Cuts[1], Cuts[2], Cuts[0]], cuts);
+        cuts = Cuts.ToList();
+        Assert.Equal(0, Sequence.Move(cuts, 2, 0)); // last to the front
+        Assert.Equal([Cuts[2], Cuts[0], Cuts[1]], cuts);
+        cuts = Cuts.ToList();
+        Assert.Equal(-1, Sequence.Move(cuts, 1, 1)); // onto its own edges: no move
+        Assert.Equal(-1, Sequence.Move(cuts, 1, 2));
+        Assert.Equal(Cuts, cuts);
+    }
+
+    [Fact]
+    public void EdgeOnASeamGoesByTheSideOfTheMouse()
+    {
+        var view = TimelineView.All(S(20)); // 50 px a second over 1000 px: seams at 500 and 700
+        var starts = Sequence.Starts(Cuts);
+        Assert.Equal(new CutEdge(0, true), Sequence.EdgeAt(Cuts, starts, view, 1000, 497, 6));
+        Assert.Equal(new CutEdge(1, false), Sequence.EdgeAt(Cuts, starts, view, 1000, 503, 6));
+        Assert.Equal(new CutEdge(0, false), Sequence.EdgeAt(Cuts, starts, view, 1000, -2, 6)); // the very start
+        Assert.Equal(new CutEdge(2, true), Sequence.EdgeAt(Cuts, starts, view, 1000, 1003, 6)); // and the very end
+        Assert.Null(Sequence.EdgeAt(Cuts, starts, view, 1000, 600, 6));
+    }
+
+    [Fact]
+    public void FilmStripStepAndNearestFrame()
+    {
+        Assert.Equal(S(0.5), FilmStrip.Step(S(30)));
+        Assert.Equal(S(15), FilmStrip.Step(S(3600)));
+        TimeSpan[] times = [S(0), S(1), S(2), S(3)];
+        Assert.Equal(0, FilmStrip.Nearest(times, S(-5)));
+        Assert.Equal(1, FilmStrip.Nearest(times, S(1.4)));
+        Assert.Equal(2, FilmStrip.Nearest(times, S(1.6)));
+        Assert.Equal(3, FilmStrip.Nearest(times, S(9)));
+        Assert.Equal(-1, FilmStrip.Nearest([], S(1)));
+    }
+}
