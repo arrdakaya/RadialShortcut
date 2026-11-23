@@ -21,6 +21,20 @@ namespace RadialShortcut.App;
 public sealed class RingWindow : Window
 {
     internal const int CloseAnimationMs = 75;
+    /// <summary>The selected slice blends from the accent at the rim to this hue-shifted accent near the center.</summary>
+    internal const double SelectionHueShift = 35;
+    /// <summary>
+    /// Strongest accent alpha over a selected slice; low enough that its label stays readable. In the dark
+    /// theme the label is white, so a very bright accent (white, yellow) gets a lighter tint.
+    /// </summary>
+    internal static byte SelectionAlpha(Color accent) =>
+        !Palette.IsDark ? (byte)0x3C : Luminance(accent) > 0.5 ? (byte)0x40 : (byte)0x60;
+
+    private static double Luminance(Color c)
+    {
+        static double Linear(byte v) => v / 255.0 <= 0.04045 ? v / 255.0 / 12.92 : Math.Pow((v / 255.0 + 0.055) / 1.055, 2.4);
+        return 0.2126 * Linear(c.R) + 0.7152 * Linear(c.G) + 0.0722 * Linear(c.B);
+    }
     // Light or dark, fixed when the window is built; rings are rebuilt when the theme changes.
     private readonly RingColors _colors = Palette.Ring;
     private readonly bool _animate;
@@ -230,11 +244,12 @@ public sealed class RingWindow : Window
         if (!_animate)
             return;
 
-        // Only the whole menu moves, briefly. Hover never changes icon size or layout.
+        // Only the whole menu moves, briefly, with a slight overshoot so it lands rather than just appears.
+        // The duration is unchanged, so the overshoot costs no extra frames. Hover never changes layout.
         var duration = TimeSpan.FromMilliseconds(Math.Clamp(_style.OpenAnimationMs, 1, 100));
         var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
         _root.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, duration) { EasingFunction = ease, FillBehavior = FillBehavior.Stop });
-        AnimateScale(0.97, 1, duration, ease);
+        AnimateScale(0.94, 1, duration, new BackEase { Amplitude = 0.35, EasingMode = EasingMode.EaseOut });
     }
 
     private void CancelPendingOpen()
@@ -413,16 +428,26 @@ public sealed class RingWindow : Window
                 new GradientStop(_colors.Outer, 1),
             },
         });
-        var stroke = Freeze(new SolidColorBrush(_colors.Edge));
+        // Hairlines catch light along the top of the ring and fade into the plain edge color below.
+        var stroke = Freeze(new LinearGradientBrush
+        {
+            MappingMode = BrushMappingMode.Absolute,
+            StartPoint = new Point(_center, _center - r1),
+            EndPoint = new Point(_center, _center + r1),
+            GradientStops = { new GradientStop(_colors.EdgeLit, 0), new GradientStop(_colors.Edge, 0.55) },
+        });
         var text = Freeze(new SolidColorBrush(_colors.Text));
         var labelBrush = Freeze(new SolidColorBrush(_colors.Label));
         var activeText = Freeze(new SolidColorBrush(_activeText));
-        var activeFill = Freeze(new SolidColorBrush(WithAlpha(_accent, 0x32)));
-        var activeEdge = Freeze(new SolidColorBrush(_accent));
+        var accent2 = HueShift(_accent, SelectionHueShift);
+        var alpha = SelectionAlpha(_accent);
+        var activeOutline = Freeze(new SolidColorBrush(WithAlpha(_accent, 0xB0)));
 
         for (var i = 0; i < _items.Count; i++)
         {
             var angle = i * _step;
+            const double rad = Math.PI / 180;
+            Point At(double r, double deg) => new(_center + r * Math.Sin(deg * rad), _center - r * Math.Cos(deg * rad));
             var path = new Path
             {
                 Data = Sector(r0, r1, angle - _step / 2, angle + _step / 2, _style.Gap),
@@ -486,7 +511,27 @@ public sealed class RingWindow : Window
             Canvas.SetLeft(content, _center + mid * Math.Sin(a) - labelWidth / 2);
             Canvas.SetTop(content, _center - mid * Math.Cos(a) - content.DesiredSize.Height / 2);
             // Geometry is built once. Selection fades this layer in place; nothing rotates,
-            // scales, blurs, or rebuilds when the pointer moves to another slice.
+            // scales, blurs, or rebuilds when the pointer moves to another slice. The glow is
+            // blurred into a bitmap cache once, so the fade only blends a finished picture.
+            var selectedFill = Freeze(new LinearGradientBrush
+            {
+                MappingMode = BrushMappingMode.Absolute,
+                StartPoint = At(r0, angle),
+                EndPoint = At(r1, angle),
+                GradientStops =
+                {
+                    new GradientStop(WithAlpha(accent2, (byte)(alpha * 0.55)), 0),
+                    new GradientStop(WithAlpha(_accent, alpha), 1),
+                },
+            });
+            var arcFill = Freeze(new LinearGradientBrush
+            {
+                MappingMode = BrushMappingMode.Absolute,
+                StartPoint = At(r1, angle - _step / 2),
+                EndPoint = At(r1, angle + _step / 2),
+                GradientStops = { new GradientStop(accent2, 0), new GradientStop(_accent, 0.5), new GradientStop(accent2, 1) },
+            });
+            var arc = Sector(r1 + 4, r1 + 7, angle - _step / 2, angle + _step / 2, _style.Gap + 10);
             var highlight = new Canvas
             {
                 Width = _style.Size,
@@ -495,12 +540,9 @@ public sealed class RingWindow : Window
                 IsHitTestVisible = false,
                 Children =
                 {
-                    new Path { Data = path.Data, Fill = activeFill },
-                    new Path
-                    {
-                        Data = Sector(r1 - 2, r1, angle - _step / 2, angle + _step / 2, _style.Gap),
-                        Fill = activeEdge,
-                    },
+                    new Path { Data = path.Data, Fill = selectedFill, Stroke = activeOutline, StrokeThickness = 1 },
+                    new Path { Data = arc, Fill = arcFill, Opacity = 0.9, Effect = new BlurEffect { Radius = 10 }, CacheMode = Cache() },
+                    new Path { Data = arc, Fill = arcFill },
                 },
             };
 
@@ -543,11 +585,23 @@ public sealed class RingWindow : Window
     private void BuildCenter(Canvas canvas, double size)
     {
         var fill = Freeze(new LinearGradientBrush(_colors.CenterLight, _colors.CenterDark, 90));
-        var edge = Freeze(new SolidColorBrush(_colors.Edge));
+        var edge = Freeze(new LinearGradientBrush(_colors.EdgeLit, _colors.Edge, 90));
         var disc = new Ellipse { Width = size, Height = size, Fill = fill, Stroke = edge, StrokeThickness = 1 };
         Canvas.SetLeft(disc, _center - size / 2);
         Canvas.SetTop(disc, _center - size / 2);
         canvas.Children.Add(disc);
+
+        // A static accent ring inside the disc, with a soft wider band under it in place of a blur.
+        var accent2 = HueShift(_accent, SelectionHueShift);
+        var ringBrush = Freeze(new LinearGradientBrush(_accent, accent2, 45));
+        var haloBrush = Freeze(new LinearGradientBrush(WithAlpha(_accent, 0x30), WithAlpha(accent2, 0x30), 45));
+        foreach (var (inset, thickness, brush) in new[] { (2.0, 5.0, haloBrush), (3.5, 1.5, ringBrush) })
+        {
+            var ring = new Ellipse { Width = size - 2 * inset, Height = size - 2 * inset, Stroke = brush, StrokeThickness = thickness, IsHitTestVisible = false };
+            Canvas.SetLeft(ring, _center - size / 2 + inset);
+            Canvas.SetTop(ring, _center - size / 2 + inset);
+            canvas.Children.Add(ring);
+        }
 
         _title.FontSize = 12;
         _title.FontWeight = FontWeights.SemiBold;
@@ -645,7 +699,11 @@ public sealed class RingWindow : Window
                     FillBehavior = FillBehavior.Stop,
                 });
             if (Icon is Path line)
+            {
                 line.Stroke = active ? Active : Text;
+                // Bolder, not bigger: the icon's box is fixed, so layout never moves.
+                line.StrokeThickness = active ? 2.0 : 1.7;
+            }
             Label.Foreground = active ? Active : LabelBrush;
         }
     }

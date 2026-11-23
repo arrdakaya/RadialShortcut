@@ -80,24 +80,28 @@ public class RingWindowTests
         return Task.CompletedTask;
     });
 
-    [Theory]
-    [InlineData("#FFFFFF")]
-    [InlineData("#FFFF00")]
-    [InlineData("#22C55E")]
-    [InlineData("#F59E0B")]
-    [InlineData("#4D9AFF")]
-    [InlineData("#000000")]
-    public Task Light_theme_selection_has_readable_text_for_custom_accents(string accent) => OnUiThread(() =>
+    public static IEnumerable<object[]> AccentsAndThemes()
     {
-        using var preview = new Preview(theme: "light", accent: accent);
+        foreach (var theme in new[] { "light", "dark" })
+        foreach (var accent in new[] { "#FFFFFF", "#FFFF00", "#22C55E", "#F59E0B", "#4D9AFF", "#000000" })
+            yield return [theme, accent];
+    }
+
+    [Theory]
+    [MemberData(nameof(AccentsAndThemes))]
+    public Task Selection_has_readable_text_for_custom_accents(string theme, string accent) => OnUiThread(() =>
+    {
+        using var preview = new Preview(theme: theme, accent: accent);
         preview.Ring.Highlight(0);
         var label = preview.Canvas.Children.OfType<StackPanel>().First().Children.OfType<TextBlock>().Single();
         var foreground = ((SolidColorBrush)label.Foreground).Color;
-        var overlay = (Color)ColorConverter.ConvertFromString(accent);
+        var color = (Color)ColorConverter.ConvertFromString(accent);
         var surface = Palette.Ring;
+        // Both ends of the selection gradient, each at the strongest alpha, as the worst case.
+        foreach (var overlay in new[] { color, RingWindow.HueShift(color, RingWindow.SelectionHueShift) })
         foreach (var background in new[] { surface.Inner, surface.Outer })
         {
-            var opacity = 0x32 / 255.0;
+            var opacity = RingWindow.SelectionAlpha(color) / 255.0;
             var selected = Color.FromRgb(
                 (byte)(background.R * (1 - opacity) + overlay.R * opacity),
                 (byte)(background.G * (1 - opacity) + overlay.G * opacity),

@@ -34,11 +34,11 @@ internal static class Palette
 
     private static readonly RingColors DarkRing = new(
         Argb(0xFF25282E), Argb(0xFF292D33), Argb(0xFF292D33), Argb(0xFF25282B),
-        Argb(0xFF50555E), Argb(0xFFE8EAED), Argb(0xFFCFD3DA), Argb(0xFFA6ADB8), 0.28);
+        Argb(0xFF50555E), Argb(0xFF6A707B), Argb(0xFFE8EAED), Argb(0xFFCFD3DA), Argb(0xFFA6ADB8), 0.28);
 
     private static readonly RingColors LightRing = new(
         Argb(0xFFF3F4F6), Argb(0xFFFAFBFC), Argb(0xFFFAFBFC), Argb(0xFFF0F2F5),
-        Argb(0xFFCCD1D9), Argb(0xFF20252D), Argb(0xFF3F4752), Argb(0xFF606B7A), 0.16);
+        Argb(0xFFCCD1D9), Argb(0xFFE6E9ED), Argb(0xFF20252D), Argb(0xFF3F4752), Argb(0xFF606B7A), 0.16);
 
     private static readonly GlassColors DarkGlass = new(
         Argb(0xF41E2025), Argb(0xF430333A), Argb(0xF42C2F36), Argb(0xF41A1C21),
@@ -84,5 +84,6 @@ internal static class Palette
 internal sealed record GlassColors(Color Inner, Color Outer, Color CenterLight, Color CenterDark,
     Color Edge, Color EdgeTop, Color EdgeBottom, Color Text, Color Label, Color Muted, double Shadow);
 
+/// <param name="EdgeLit">Hairline color on the top side of the ring, as if lit from above.</param>
 internal sealed record RingColors(Color Inner, Color Outer, Color CenterLight, Color CenterDark,
-    Color Edge, Color Text, Color Label, Color Muted, double Shadow);
+    Color Edge, Color EdgeLit, Color Text, Color Label, Color Muted, double Shadow);
