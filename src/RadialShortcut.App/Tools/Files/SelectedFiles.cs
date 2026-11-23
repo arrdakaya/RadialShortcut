@@ -18,15 +18,16 @@ internal static class SelectedFiles
 
     /// <summary>
     /// The selection in an Explorer window, through the Shell's own automation object. With tabs
-    /// (Windows 11) all tabs share the window; the first one with a selection wins.
+    /// (Windows 11) all tabs share the window; the tab on screen is the one whose folder name the
+    /// window title shows, so it is asked first, and a hidden tab's selection is used only after it.
     /// </summary>
-    public static List<string> InExplorer(IntPtr hwnd) => Read(hwnd, countOnly: false).Paths;
+    public static List<string> InExplorer(IntPtr hwnd, bool folders = false) => Read(hwnd, countOnly: false, folders).Paths;
 
     /// <summary>
     /// The desktop's selection without touching the clipboard, so it can be read mid-drag. The Shell
     /// hands out the desktop's view by asking for it as the desktop (SWC_DESKTOP).
     /// </summary>
-    public static List<string> OnDesktopView()
+    public static List<string> OnDesktopView(bool folders = false)
     {
         var paths = new List<string>();
         try
@@ -37,7 +38,7 @@ internal static class SelectedFiles
             foreach (dynamic item in desktop.Document.SelectedItems())
             {
                 string path = item.Path;
-                if (File.Exists(path))
+                if (File.Exists(path) || folders && Directory.Exists(path))
                     paths.Add(path);
             }
         }
@@ -78,21 +79,34 @@ internal static class SelectedFiles
         return queue;
     }
 
-    private static (List<string> Paths, int Count) Read(IntPtr hwnd, bool countOnly)
+    private static (List<string> Paths, int Count) Read(IntPtr hwnd, bool countOnly, bool folders = false)
     {
         var paths = new List<string>();
         var count = 0;
         try
         {
             dynamic shell = _shell ??= Activator.CreateInstance(Type.GetTypeFromProgID("Shell.Application")!)!;
+            var title = hwnd == IntPtr.Zero ? "" : Native.WindowTitle(hwnd);
+            var tabs = new List<(dynamic Tab, bool Shown)>();
             foreach (dynamic window in shell.Windows())
+            {
+                try
+                {
+                    if ((IntPtr)(long)window.HWND != hwnd)
+                        continue;
+                    string name = window.LocationName;
+                    tabs.Add((window, !string.IsNullOrEmpty(name) && title.StartsWith(name, StringComparison.OrdinalIgnoreCase)));
+                }
+                catch (Exception e) when (e is System.Runtime.InteropServices.COMException or Microsoft.CSharp.RuntimeBinder.RuntimeBinderException)
+                {
+                }
+            }
+            foreach (var (window, _) in tabs.OrderByDescending(t => t.Shown))
             {
                 if (count > 0)
                     break;
                 try
                 {
-                    if ((IntPtr)(long)window.HWND != hwnd)
-                        continue;
                     dynamic items = window.Document.SelectedItems();
                     if (countOnly)
                     {
@@ -112,7 +126,7 @@ internal static class SelectedFiles
                     foreach (dynamic item in items)
                     {
                         string path = item.Path;
-                        if (File.Exists(path))
+                        if (File.Exists(path) || folders && Directory.Exists(path))
                             paths.Add(path);
                     }
                     count = paths.Count;
@@ -144,15 +158,15 @@ internal static class SelectedFiles
         return dialog.ShowDialog() == true ? [.. dialog.FileNames] : [];
     }
 
-    /// <summary>The Explorer or desktop selection under the ring; empty anywhere else.</summary>
-    public static async Task<List<string>> SelectionOnlyAsync(IntPtr target) =>
+    /// <summary>The Explorer or desktop selection under the ring; empty anywhere else. Folders only when asked.</summary>
+    public static async Task<List<string>> SelectionOnlyAsync(IntPtr target, bool folders = false) =>
         Interlocked.Exchange(ref Dropped, null) is { } dropped ? dropped
-        : IsExplorer(target) ? InExplorer(target)
-        : IsDesktop(target) ? await OnDesktopAsync(target)
+        : IsExplorer(target) ? InExplorer(target, folders)
+        : IsDesktop(target) ? await OnDesktopAsync(target, folders)
         : [];
 
     /// <summary>The desktop has no automation object; copying the selection is the simple way to read it.</summary>
-    private static async Task<List<string>> OnDesktopAsync(IntPtr target)
+    private static async Task<List<string>> OnDesktopAsync(IntPtr target, bool folders)
     {
         var saved = SelectionTools.SaveClipboard();
         var before = Native.ClipboardSequence();
@@ -167,7 +181,7 @@ internal static class SelectedFiles
             ToolRunner.Retry(() =>
             {
                 if (Clipboard.ContainsFileDropList())
-                    files.AddRange(Clipboard.GetFileDropList().Cast<string>().Where(File.Exists));
+                    files.AddRange(Clipboard.GetFileDropList().Cast<string>().Where(f => File.Exists(f) || folders && Directory.Exists(f)));
             });
             SelectionTools.RestoreClipboard(saved);
         }

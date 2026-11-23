@@ -27,6 +27,7 @@ internal static class ScrollCapture
         }
 
         using var stop = new CancellationTokenSource();
+        using var esc = EscWatcher.Start(stop.Cancel);
         using var frame = RegionFrame.Show(rect);
         var badge = new Badge(rect) { Text = T("Bölgede aşağı kaydır · bitince ■ veya Esc", "Scroll down in the region · ■ or Esc when done") }.WithStop(stop.Cancel);
         badge.Show();
@@ -50,7 +51,7 @@ internal static class ScrollCapture
             var footer = 0;
 
             // The user scrolls; each frame is lined up with the last one that matched and its new rows are added.
-            while (!stop.IsCancellationRequested && !Native.IsKeyDown(Native.VK_ESCAPE))
+            while (!stop.IsCancellationRequested)
             {
                 await Task.Delay(PollMs);
 

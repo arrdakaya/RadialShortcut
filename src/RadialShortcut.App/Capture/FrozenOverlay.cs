@@ -68,7 +68,7 @@ internal abstract class FrozenOverlay : Window
 
     /// <summary>
     /// Freezes every monitor, opens one overlay per monitor and completes with the first result
-    /// (null on cancel). Keyboard focus goes to the overlay under the cursor so Esc works right away.
+    /// (null on cancel). Esc is caught globally: Windows may keep the keyboard on the app below.
     /// </summary>
     public static Task<T?> RunAsync<T>(Func<Display, BitmapSource, Action<T?>, FrozenOverlay> create) where T : class
     {
@@ -76,11 +76,13 @@ internal abstract class FrozenOverlay : Window
         var displays = ScreenCapture.Displays();
         var frozen = displays.Select(d => ScreenCapture.Grab(d.Bounds)).ToList();
         var overlays = new List<FrozenOverlay>();
+        Tools.EscWatcher? esc = null;
 
         void Finish(T? result)
         {
             if (done.Task.IsCompleted)
                 return;
+            esc?.Dispose();
             foreach (var o in overlays)
                 o.Close();
             done.SetResult(result);
@@ -91,6 +93,7 @@ internal abstract class FrozenOverlay : Window
 
         foreach (var o in overlays)
             o.Show();
+        esc = Tools.EscWatcher.Start(() => Finish(null));
 
         var (x, y) = ScreenCapture.CursorPosition();
         (overlays.FirstOrDefault(o => o.Contains(x, y)) ?? overlays[0]).Activate();

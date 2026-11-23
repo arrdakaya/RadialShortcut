@@ -48,7 +48,11 @@ internal sealed class DropZones : Window
         _ => true,
     };
 
-    public static bool AnyFor(IReadOnlyList<string> files) => ToolIds.Any(id => Accepts(id, MediaKinds.Of(files[0])));
+    /// <summary>Folders only go to Unlock; files by their kind.</summary>
+    private static bool Accepts(string tool, string path) =>
+        Directory.Exists(path) ? tool == "unlock" : Accepts(tool, MediaKinds.Of(path));
+
+    public static bool AnyFor(IReadOnlyList<string> files) => ToolIds.Any(id => Accepts(id, files[0]));
 
     /// <param name="files">What is being dragged; empty when unknown, which shows every tile.</param>
     public static void ShowAt(ScreenPoint origin, IReadOnlyList<string> files)
@@ -103,7 +107,7 @@ internal sealed class DropZones : Window
         _edge = Frozen(new SolidColorBrush(_glass.Edge));
         _label = Frozen(new SolidColorBrush(_glass.Label));
 
-        var items = DefaultFileRing.Items.Where(i => ToolIds.Contains(i.Id) && (files.Count == 0 || Accepts(i.Id, MediaKinds.Of(files[0])))).ToList();
+        var items = DefaultFileRing.Items.Where(i => ToolIds.Contains(i.Id) && (files.Count == 0 || Accepts(i.Id, files[0]))).ToList();
         var tiles = new WrapPanel { Width = Math.Min(3, items.Count) * 108 };
         foreach (var item in items)
             tiles.Children.Add(Tile(item));
@@ -174,7 +178,17 @@ internal sealed class DropZones : Window
                 return;
             _dropped = true;
             Close();
-            SelectedFiles.Dropped = files.Where(File.Exists).ToList();
+            // Only Unlock works on folders; the media tools need files.
+            var usable = files.Where(f => Directory.Exists(f) ? item.Id == "unlock" : File.Exists(f)).ToList();
+            if (usable.Count == 0)
+            {
+                // Running the tool with nothing would open its file dialog, as if the drop never happened.
+                ResultCard.Near((_origin.X, _origin.Y), item.Title, Directory.Exists(files[0])
+                    ? T("Bu araç klasörle çalışmaz; içindeki dosyaları bırak.", "This tool doesn't take folders; drop the files inside.")
+                    : T("Bırakılan öge okunamadı.", "The dropped item couldn't be read.")).ShowNear();
+                return;
+            }
+            SelectedFiles.Dropped = usable;
             _ = ToolRunner.RunAsync(item, _origin);
         };
         return tile;

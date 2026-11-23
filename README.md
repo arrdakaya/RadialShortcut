@@ -34,7 +34,7 @@
   their edges to trim, and play the result straight through; crop the picture to one window, drop the sound, or save as GIF
 - **Annotate** images, **remove backgrounds**
 - **Download** video or audio from a link
-- **Unlock** a file by closing whatever holds it
+- **Unlock** a file or folder by closing whatever holds it, straight from Windows' "in use" dialog
 - A **library** of everything you've captured and made
 
 **Made to stay out of the way**

@@ -47,8 +47,9 @@ internal static class FileDrag
             return;
         // What is being dragged picks the tiles; when it cannot be read every tile shows.
         var source = Native.WindowAt(start.X, start.Y);
-        _files = SelectedFiles.IsExplorer(source) ? SelectedFiles.InExplorer(source)
-            : SelectedFiles.IsDesktop(source) ? SelectedFiles.OnDesktopView()
+        // Folders included: a dragged folder should offer Unlock, not every media tool.
+        _files = SelectedFiles.IsExplorer(source) ? SelectedFiles.InExplorer(source, folders: true)
+            : SelectedFiles.IsDesktop(source) ? SelectedFiles.OnDesktopView(folders: true)
             : [];
         if (_files.Count > 0 && !DropZones.AnyFor(_files))
             return;

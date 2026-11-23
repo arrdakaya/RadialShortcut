@@ -35,13 +35,20 @@ internal static class ScreenRecorder
         }
 
         using var stop = new CancellationTokenSource();
+        using var esc = EscWatcher.Start(stop.Cancel); // during the countdown too
         using var frame = RegionFrame.Show(rect, RegionFrame.Ready);
         var badge = new Badge(rect) { AtScreenTop = true }.WithStop(stop.Cancel);
         badge.Show();
         for (var i = 3; i > 0 && !stop.IsCancellationRequested; i--)
         {
-            badge.Text = T($"Kayıt {i} sn sonra başlıyor", $"Recording starts in {i} s");
-            await Task.Delay(1000);
+            badge.Text = T($"Kayıt {i} sn sonra başlıyor · Esc iptal", $"Recording starts in {i} s · Esc cancels");
+            try
+            {
+                await Task.Delay(1000, stop.Token);
+            }
+            catch (TaskCanceledException)
+            {
+            }
         }
         if (stop.IsCancellationRequested)
         {
@@ -123,7 +130,7 @@ internal static class ScreenRecorder
         var interval = TimeSpan.FromSeconds(1.0 / Fps);
         try
         {
-            for (long n = 0; !stop.IsCancellationRequested && !Native.IsKeyDown(Native.VK_ESCAPE); n++)
+            for (long n = 0; !stop.IsCancellationRequested; n++)
             {
                 var due = interval * n;
                 var wait = due - clock.Elapsed;
