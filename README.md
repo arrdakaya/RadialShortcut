@@ -28,8 +28,12 @@
 - **Pin** a capture on top of everything
 
 **File tools**
-- **Convert** images, video, audio and PDF
-- **Compress** and **resize**, with size estimates before you pick
+- **Convert** images, video, audio and PDF: GIFs at the frame rate and width you pick, the sound out of a video
+  without re-encoding, chosen PDF pages ("1-3, 5, 8-") at screen, sharp or print resolution
+- **Compress**, with size estimates before you pick, to a target size ("at most 2 MB"), or with your own
+  quality, resolution and bitrate
+- **Resize and edit** images: crop (free or a fixed ratio), rotate, flip, straighten, exact pixel size or percent,
+  and save as PNG, JPG or WebP at the quality you choose; rotate, flip or crop video
 - **Trim video**: a timeline editor for one or more videos: split, delete, drag pieces to reorder and
   their edges to trim, and play the result straight through; crop the picture to one window, drop the sound, or save as GIF
 - **Annotate** images, **remove backgrounds**
